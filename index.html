@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Studio Duo | Live Collaborative</title>
+    <title>Studio Duo | Advanced Live</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -35,8 +35,8 @@
         #taskbar {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             background: var(--surface); backdrop-filter: blur(20px);
-            padding: 10px 20px; border-radius: 12px;
-            display: flex; gap: 10px; align-items: center;
+            padding: 10px 24px; border-radius: 12px;
+            display: flex; gap: 12px; align-items: center;
             border: 1px solid var(--border); z-index: 8000; box-shadow: var(--shadow);
             pointer-events: all;
         }
@@ -62,11 +62,14 @@
         
         .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 8px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
         .tool-btn.active { opacity: 1; border-bottom: 2px solid var(--accent); }
-        .swatch { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); }
+
+        #colorWheel { width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer; border-radius: 50%; overflow: hidden; }
         
-        /* Slider Styling */
         .size-slider { width: 60px; height: 4px; cursor: pointer; accent-color: var(--accent); }
-        .slider-label { font-size: 9px; font-weight: 700; opacity: 0.6; margin-right: -5px; }
+        .slider-label { font-size: 9px; font-weight: 700; opacity: 0.6; }
+
+        .toggle-wrap { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+        .toggle-wrap input { cursor: pointer; }
     </style>
 </head>
 <body>
@@ -82,16 +85,23 @@
         <div id="taskbar">
             <button class="tool-btn" onclick="addItem('text')">Text</button>
             <button class="tool-btn" onclick="document.getElementById('fileUp').click()">Media</button>
+            
             <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 2px; align-items: center;">
                 <button class="tool-btn" onclick="document.getElementById('bgUp').click()">BG</button>
                 <button class="tool-btn" onclick="removeBackground()" style="font-size: 8px; color: #888;">RMV BG</button>
             </div>
             
-            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 8px; align-items: center;">
+            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 10px; align-items: center;">
                 <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
                 <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
+                <input type="color" id="colorWheel" value="#111111" onchange="currentColor = this.value">
                 <span class="slider-label">SIZE</span>
                 <input type="range" class="size-slider" id="brushSize" min="1" max="50" value="3">
+                
+                <label class="toggle-wrap">
+                    <input type="checkbox" id="pressureToggle">
+                    <span style="font-size: 9px; font-weight: 700; opacity: 0.6;">PRESS</span>
+                </label>
             </div>
 
             <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 5px;">
@@ -99,12 +109,7 @@
                 <button class="tool-btn" onclick="redo()">⟳</button>
             </div>
 
-            <div style="display:flex; gap:8px; padding: 0 10px; border-left: 1px solid var(--border)">
-                <div class="swatch" style="background:#111" onclick="setColor('#111')"></div>
-                <div class="swatch" style="background:#e63946" onclick="setColor('#e63946')"></div>
-                <div class="swatch" style="background:#457b9d" onclick="setColor('#457b9d')"></div>
-            </div>
-            <button class="tool-btn" onclick="clearAll()" style="color:red">Reset</button>
+            <button class="tool-btn" onclick="clearAll()" style="color:red; border-left: 1px solid var(--border); padding-left:10px;">Reset</button>
             
             <input type="file" id="fileUp" hidden onchange="uploadMedia(this)">
             <input type="file" id="bgUp" hidden onchange="uploadBackground(this)">
@@ -112,20 +117,20 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://djpcwjjjjwbpsvuqmxxt.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI';
+        const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+        const SUPABASE_KEY = 'YOUR_ANON_KEY';
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let currentCode = "";
         const canvas = document.getElementById('drawing-canvas');
         const ctx = canvas.getContext('2d');
         const sizeInput = document.getElementById('brushSize');
+        const pressureToggle = document.getElementById('pressureToggle');
         
         let isDrawing = false;
         let activeMode = null;
         let currentColor = "#111111";
         let lastX = 0, lastY = 0;
-
         let history = [];
         let redoStack = [];
 
@@ -171,19 +176,14 @@
                 });
             });
             await sb.from('studio_sessions').upsert({ 
-                id: currentCode, 
-                data: items, 
-                drawing: canvas.toDataURL(),
-                background: document.body.style.backgroundImage 
+                id: currentCode, data: items, drawing: canvas.toDataURL(), background: document.body.style.backgroundImage 
             });
         };
 
         async function initialLoad() {
             const { data } = await sb.from('studio_sessions').select('*').eq('id', currentCode).single();
             if (data) { 
-                renderItems(data.data); 
-                renderDrawing(data.drawing); 
-                renderBackground(data.background);
+                renderItems(data.data); renderDrawing(data.drawing); renderBackground(data.background);
                 history = [data.drawing || canvas.toDataURL()];
             }
         }
@@ -202,7 +202,6 @@
         }
 
         function renderBackground(bg) { document.body.style.backgroundImage = bg || ''; }
-
         window.removeBackground = function() { document.body.style.backgroundImage = ''; pushUpdate(); };
 
         window.toggleMode = function(mode) {
@@ -215,8 +214,7 @@
         window.undo = function() {
             if (history.length <= 1) return;
             redoStack.push(history.pop());
-            const previousState = history[history.length - 1];
-            renderDrawing(previousState);
+            renderDrawing(history[history.length - 1]);
             pushUpdate();
         };
 
@@ -228,38 +226,32 @@
             pushUpdate();
         };
 
-        window.setColor = function(c) { currentColor = c; if(activeMode !== 'draw') toggleMode('draw'); };
-
+        // --- DRAWING WITH PRESSURE ---
         canvas.onpointerdown = (e) => { 
-            isDrawing = true; 
-            [lastX, lastY] = [e.clientX, e.clientY]; 
+            isDrawing = true; [lastX, lastY] = [e.clientX, e.clientY]; 
         };
 
         canvas.onpointermove = (e) => {
             if (!isDrawing) return;
-            ctx.beginPath(); 
-            ctx.moveTo(lastX, lastY); 
-            ctx.lineTo(e.clientX, e.clientY);
+            ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(e.clientX, e.clientY);
             
-            // Apply slider size
-            const size = parseInt(sizeInput.value);
-            ctx.lineWidth = activeMode === 'erase' ? size * 2 : size;
+            const baseSize = parseInt(sizeInput.value);
+            // Pressure is 0.5 for mouse, 0-1.0 for stylus. 
+            // If toggle is off, multiplier is always 1.
+            const pressure = pressureToggle.checked ? (e.pressure || 0.5) : 1;
             
-            ctx.lineCap = "round"; 
-            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = (activeMode === 'erase' ? baseSize * 2 : baseSize) * pressure;
+            ctx.lineCap = "round"; ctx.strokeStyle = currentColor;
             ctx.globalCompositeOperation = activeMode === 'erase' ? "destination-out" : "source-over";
-            ctx.stroke(); 
-            [lastX, lastY] = [e.clientX, e.clientY];
+            ctx.stroke(); [lastX, lastY] = [e.clientX, e.clientY];
         };
 
         canvas.onpointerup = () => { 
             if (!isDrawing) return;
             isDrawing = false; 
-            const currentState = canvas.toDataURL();
-            history.push(currentState);
-            if (history.length > 50) history.shift(); // Limit history to save memory
-            redoStack = []; 
-            pushUpdate(); 
+            history.push(canvas.toDataURL());
+            if (history.length > 30) history.shift();
+            redoStack = []; pushUpdate(); 
         };
 
         window.addItem = function(type, val = '', x = 100, y = 100, w = 300, h = 200, shouldPush = true) {
@@ -267,11 +259,9 @@
             div.className = 'item';
             div.style.left = x + 'px'; div.style.top = y + 'px';
             div.style.width = w + 'px'; div.style.height = h + 'px';
-
             const handle = document.createElement('div'); handle.className = 'drag-handle';
             const close = document.createElement('button'); close.className = 'close-btn';
             close.onclick = () => { div.remove(); pushUpdate(); };
-
             const contentWrap = document.createElement('div'); contentWrap.className = 'content-wrap';
             let content;
             if (type === 'text') {
@@ -281,12 +271,10 @@
                 content = document.createElement(type === 'video' ? 'video' : 'img');
                 content.src = val; if(type === 'video') content.controls = true;
             }
-
             const resizer = document.createElement('div'); resizer.className = 'resizer';
             contentWrap.appendChild(content); div.appendChild(handle); div.appendChild(close);
             div.appendChild(contentWrap); div.appendChild(resizer);
             document.getElementById('desktop').appendChild(div);
-
             setupInteraction(div, handle, resizer);
             if(shouldPush) pushUpdate();
         };
@@ -310,21 +298,16 @@
         }
 
         window.uploadMedia = function(input) {
-            const file = input.files[0];
-            if (!file) return;
+            const file = input.files[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => addItem(file.type.startsWith('image') ? 'image' : 'video', e.target.result);
             reader.readAsDataURL(file);
         };
 
         window.uploadBackground = function(input) {
-            const file = input.files[0];
-            if (!file) return;
+            const file = input.files[0]; if (!file) return;
             const reader = new FileReader();
-            reader.onload = (e) => {
-                document.body.style.backgroundImage = `url('${e.target.result}')`;
-                pushUpdate();
-            };
+            reader.onload = (e) => { document.body.style.backgroundImage = `url('${e.target.result}')`; pushUpdate(); };
             reader.readAsDataURL(file);
         };
 
