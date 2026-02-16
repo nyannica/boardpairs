@@ -11,13 +11,17 @@
         #gate { position: fixed; inset: 0; background: var(--bg-base); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 6000; }
         .gate-input { background: transparent; border: none; border-bottom: 2px solid var(--border); color: var(--text-main); font-size: 20px; text-align: center; outline: none; padding: 10px; letter-spacing: 8px; width: 220px; margin-bottom: 20px; }
         .gate-btn { background: var(--accent); color: white; border: none; padding: 12px 32px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; border-radius: 4px; }
+        
         #drawing-canvas { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; }
-        #drawing-canvas.active { z-index: 2500; pointer-events: all; cursor: crosshair; }
+        #drawing-canvas.active { z-index: 2500; pointer-events: auto; cursor: crosshair; }
+        
         #desktop { width: 100vw; height: 100vh; position: relative; display: none; z-index: 2; }
         #taskbar { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--surface); backdrop-filter: blur(20px); padding: 10px 20px; border-radius: 12px; display: flex; gap: 15px; align-items: center; border: 1px solid var(--border); z-index: 4000; box-shadow: var(--shadow); }
+        
         .item { position: absolute; min-width: 50px; min-height: 50px; z-index: 10; cursor: grab; }
         .item-box { background: var(--surface); backdrop-filter: blur(15px); padding: 32px 14px 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--shadow); resize: both; overflow: hidden; }
         .item-transparent { padding: 10px; cursor: grab; background: transparent; }
+        
         .item textarea { width: 100%; height: 140px; border: none; resize: none; outline: none; background: transparent; color: var(--text-main); font-size: 14px; line-height: 1.6; font-family: inherit; }
         .item img, .item video { max-width: 100%; display: block; pointer-events: none; border-radius: 4px; }
         .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 4px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
@@ -45,6 +49,7 @@
             <button class="tool-btn" onclick="addItem('text')">Text</button>
             <button class="tool-btn" onclick="document.getElementById('fileUp').click()">Media</button>
             <button class="tool-btn" onclick="document.getElementById('bgUp').click()">BG</button>
+            <button class="tool-btn" onclick="clearBackground()">Clear BG</button>
             <button id="drawBtn" class="tool-btn" onclick="toggleMode('draw')">Draw</button>
             <button id="eraseBtn" class="tool-btn" onclick="toggleMode('erase')">Erase</button>
             
@@ -63,8 +68,7 @@
     </div>
 
     <script>
-        // --- CONFIG ---
-        const SB_URL = "https://djpcwjjjjwbpsvuqmxxt.supabase.co"; 
+        const SB_URL = "https://djpcwjjjjwbpsvuqmxxt.supabase.co";
         const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI";
         const supabase = window.supabase.createClient(SB_URL, SB_KEY);
 
@@ -80,14 +84,7 @@
             document.getElementById('gate').style.display = "none";
             document.getElementById('desktop').style.display = "block";
             resizeCanvas();
-            
-            // Listen for Realtime updates
-            supabase.channel('any')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_duo', filter: `id=eq.${currentRoom}` }, 
-                payload => { renderFromData(payload.new.data); })
-            .subscribe();
-
-            // Initial Load
+            supabase.channel('any').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_duo', filter: `id=eq.${currentRoom}` }, payload => { renderFromData(payload.new.data); }).subscribe();
             const { data } = await supabase.from('studio_duo').select('data').eq('id', currentRoom).single();
             if (data) renderFromData(data.data);
             else await supabase.from('studio_duo').insert([{ id: currentRoom, data: { items: [], draw: "", bg: "" } }]);
@@ -98,31 +95,30 @@
             canvas.height = window.innerHeight;
         }
 
-        // --- CORE SYNC LOGIC ---
-        let syncTimeout;
         async function pushToCloud() {
             document.getElementById('sync-indicator').style.opacity = 1;
             const items = [];
             document.querySelectorAll('.item').forEach(el => {
                 const c = el.querySelector('.content');
-                items.push({ type: el.dataset.type, val: el.dataset.type === 'text' ? c.value : c.src, x: el.style.left, y: el.style.top, w: el.style.width, h: el.style.height, trans: el.dataset.trans === "true" });
+                items.push({ 
+                    type: el.dataset.type, 
+                    val: el.dataset.type === 'text' ? c.value : c.src, 
+                    x: el.style.left, 
+                    y: el.style.top, 
+                    w: el.style.width, 
+                    h: el.style.height, 
+                    trans: el.dataset.trans === "true" 
+                });
             });
-
             const state = { items, draw: canvas.toDataURL(), bg: document.body.style.backgroundImage };
             await supabase.from('studio_duo').update({ data: state }).eq('id', currentRoom);
-            
-            clearTimeout(syncTimeout);
-            syncTimeout = setTimeout(() => { document.getElementById('sync-indicator').style.opacity = 0; }, 1000);
+            setTimeout(() => { document.getElementById('sync-indicator').style.opacity = 0; }, 1000);
         }
 
         function renderFromData(data) {
-            if (!data) return;
-            // Only update if we aren't currently dragging or drawing to prevent flicker
-            if (isDrawing) return; 
-            
+            if (!data || isDrawing) return;
             document.getElementById('desktop').querySelectorAll('.item').forEach(i => i.remove());
             data.items.forEach(d => addItem(d.type, d.val, d.x, d.y, d.w, d.h, d.trans, true));
-            
             if (data.draw) {
                 const img = new Image();
                 img.onload = () => { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img, 0, 0); };
@@ -130,16 +126,6 @@
             }
             if (data.bg) document.body.style.backgroundImage = data.bg;
         }
-
-        // --- UI & TOOLS ---
-        document.querySelectorAll('.swatch').forEach(s => {
-            s.onclick = () => {
-                document.querySelectorAll('.swatch').forEach(sw => sw.classList.remove('active'));
-                s.classList.add('active');
-                currentColor = s.dataset.color;
-                toggleMode('draw');
-            }
-        });
 
         function toggleMode(mode) {
             activeMode = (activeMode === mode) ? null : mode;
@@ -151,21 +137,20 @@
         function addItem(type, val = '', x = '100px', y = '120px', w = 'auto', h = 'auto', isTransparent = false, isLoading = false) {
             const div = document.createElement('div');
             div.className = `item ${isTransparent ? 'item-transparent' : 'item-box'}`;
-            div.dataset.type = type; div.dataset.trans = isTransparent;
-            div.style.left = x; div.style.top = y;
+            div.dataset.type = type; div.dataset.trans = isTransparent; div.style.left = x; div.style.top = y;
             if(!isTransparent) { div.style.width = w; div.style.height = h; }
-
+            
             const close = document.createElement('button');
             close.innerHTML = '×'; close.className = 'close-btn';
             close.onclick = () => { div.remove(); pushToCloud(); };
             div.appendChild(close);
-
+            
             const content = document.createElement(type === 'text' ? 'textarea' : (type === 'image' ? 'img' : 'video'));
             content.className = 'content';
             if (type === 'text') { content.value = val; content.onblur = pushToCloud; } else { content.src = val; }
             if (type === 'video') content.controls = true;
             div.appendChild(content);
-
+            
             makeDraggable(div);
             document.getElementById('desktop').appendChild(div);
             if (!isLoading) pushToCloud();
@@ -173,18 +158,41 @@
 
         function makeDraggable(el) {
             let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
-            el.onmousedown = el.ontouchstart = (e) => {
+            
+            // Mouse/Touch Start
+            const startDrag = (e) => {
                 if (['TEXTAREA', 'BUTTON', 'VIDEO'].includes(e.target.tagName)) return;
-                p3 = (e.touches ? e.touches[0].clientX : e.clientX);
-                p4 = (e.touches ? e.touches[0].clientY : e.clientY);
+                
+                const rect = el.getBoundingClientRect();
+                const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+                const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+
+                // FIX: Check if clicking the resize corner (bottom-right 20px)
+                const isResizeHandle = (clientX > rect.right - 25 && clientY > rect.bottom - 25);
+                if (isResizeHandle) return;
+
+                p3 = clientX;
+                p4 = clientY;
+                
                 document.onmousemove = document.ontouchmove = (e) => {
                     const cx = (e.touches ? e.touches[0].clientX : e.clientX);
                     const cy = (e.touches ? e.touches[0].clientY : e.clientY);
                     p1 = p3 - cx; p2 = p4 - cy; p3 = cx; p4 = cy;
                     el.style.top = (el.offsetTop - p2) + "px"; el.style.left = (el.offsetLeft - p1) + "px";
                 };
-                document.onmouseup = document.ontouchend = () => { document.onmousemove = document.ontouchmove = null; pushToCloud(); };
+                
+                document.onmouseup = document.ontouchend = () => { 
+                    document.onmousemove = document.ontouchmove = null; 
+                    pushToCloud(); 
+                };
             };
+
+            el.onmousedown = el.ontouchstart = startDrag;
+        }
+
+        function clearBackground() {
+            document.body.style.backgroundImage = 'none';
+            pushToCloud();
         }
 
         function uploadMedia(input) {
@@ -200,23 +208,41 @@
             reader.readAsDataURL(input.files[0]);
         }
 
-        // Drawing events
-        canvas.onmousedown = canvas.ontouchstart = (e) => { 
-            if(!activeMode) return; isDrawing = true; ctx.beginPath(); 
+        // Pointer Events for Pressure Sensitivity
+        canvas.onpointerdown = (e) => { 
+            if(!activeMode) return;
+            isDrawing = true; ctx.beginPath(); 
             const rect = canvas.getBoundingClientRect();
-            ctx.moveTo((e.touches?e.touches[0].clientX:e.clientX)-rect.left, (e.touches?e.touches[0].clientY:e.clientY)-rect.top);
+            ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
         };
-        canvas.onmousemove = canvas.ontouchmove = (e) => {
+
+        canvas.onpointermove = (e) => {
             if(!isDrawing) return;
             const rect = canvas.getBoundingClientRect();
-            const x = (e.touches?e.touches[0].clientX:e.clientX)-rect.left;
-            const y = (e.touches?e.touches[0].clientY:e.clientY)-rect.top;
-            ctx.lineTo(x, y); ctx.lineWidth = 3; ctx.lineCap = 'round';
-            if(activeMode === 'erase') { ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = 20; }
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            ctx.lineTo(x, y);
+            const pressure = e.pressure > 0 ? e.pressure : 0.5;
+            ctx.lineWidth = activeMode === 'erase' ? 40 * pressure : 10 * pressure;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            if(activeMode === 'erase') { ctx.globalCompositeOperation = 'destination-out'; }
             else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = currentColor; }
             ctx.stroke();
         };
-        window.onmouseup = window.ontouchend = () => { if(isDrawing) { isDrawing = false; pushToCloud(); } };
+
+        window.onpointerup = () => { if(isDrawing) { isDrawing = false; pushToCloud(); } };
+
+        document.querySelectorAll('.swatch').forEach(s => {
+            s.onclick = () => {
+                document.querySelectorAll('.swatch').forEach(sw => sw.classList.remove('active'));
+                s.classList.add('active');
+                currentColor = s.dataset.color;
+                toggleMode('draw');
+            }
+        });
     </script>
 </body>
 </html>
