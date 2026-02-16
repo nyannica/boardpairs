@@ -20,6 +20,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
             background-color: var(--bg-base); background-size: cover; background-position: center;
             color: var(--text-main); overflow: hidden; touch-action: none;
+            transition: background 0.3s ease;
         }
 
         #gate { position: fixed; inset: 0; background: var(--bg-base); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9000; }
@@ -40,7 +41,6 @@
             pointer-events: all;
         }
 
-        /* Improved Item System */
         .item { 
             position: absolute; min-width: 150px; min-height: 100px; 
             z-index: 100; pointer-events: all; display: flex; flex-direction: column;
@@ -51,12 +51,7 @@
         .drag-handle { height: 28px; width: 100%; background: rgba(0,0,0,0.04); cursor: move; display: flex; align-items: center; justify-content: center; }
         .drag-handle::after { content: '••••'; color: #999; font-size: 12px; letter-spacing: 2px; }
 
-        .resizer { 
-            width: 16px; height: 16px; 
-            background: transparent; 
-            position: absolute; right: 0; bottom: 0; 
-            cursor: nwse-resize; z-index: 110; 
-        }
+        .resizer { width: 16px; height: 16px; position: absolute; right: 0; bottom: 0; cursor: nwse-resize; z-index: 110; }
         .resizer::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 4px; height: 4px; border-right: 2px solid #ccc; border-bottom: 2px solid #ccc; }
 
         .content-wrap { flex-grow: 1; position: relative; width: 100%; height: 100%; overflow: hidden; display: flex;}
@@ -83,8 +78,13 @@
         <div id="taskbar">
             <button class="tool-btn" onclick="addItem('text')">Text</button>
             <button class="tool-btn" onclick="document.getElementById('fileUp').click()">Media</button>
+            <button class="tool-btn" onclick="document.getElementById('bgUp').click()">BG</button>
             <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
             <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
+            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 5px;">
+                <button class="tool-btn" onclick="undo()">⟲</button>
+                <button class="tool-btn" onclick="redo()">⟳</button>
+            </div>
             <div style="display:flex; gap:8px; padding: 0 10px; border-left: 1px solid var(--border)">
                 <div class="swatch" style="background:#111" onclick="setColor('#111')"></div>
                 <div class="swatch" style="background:#e63946" onclick="setColor('#e63946')"></div>
@@ -92,15 +92,13 @@
             </div>
             <button class="tool-btn" onclick="clearAll()" style="color:red">Reset</button>
             <input type="file" id="fileUp" hidden onchange="uploadMedia(this)">
+            <input type="file" id="bgUp" hidden onchange="uploadBackground(this)">
         </div>
     </div>
 
     <script>
-        // CONFIGURATION
         const SUPABASE_URL = 'https://djpcwjjjjwbpsvuqmxxt.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI';
-        
-        // Use 'sb' to avoid conflict with the library's global 'supabase' object
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let currentCode = "";
@@ -111,7 +109,10 @@
         let currentColor = "#111111";
         let lastX = 0, lastY = 0;
 
-        // --- GLOBAL FUNCTIONS ---
+        // History Stacks
+        let history = [];
+        let redoStack = [];
+
         window.unlock = async function() {
             const input = document.getElementById('accessCode').value;
             if (input.length < 2) return;
@@ -138,6 +139,7 @@
                 payload => {
                     renderItems(payload.new.data);
                     renderDrawing(payload.new.drawing);
+                    renderBackground(payload.new.background);
                 }).subscribe();
         }
 
@@ -147,18 +149,27 @@
             document.querySelectorAll('.item').forEach(el => {
                 const type = el.querySelector('img') ? 'image' : el.querySelector('video') ? 'video' : 'text';
                 items.push({
-                    type, 
-                    x: parseInt(el.style.left), y: parseInt(el.style.top),
+                    type, x: parseInt(el.style.left), y: parseInt(el.style.top),
                     w: parseInt(el.style.width), h: parseInt(el.style.height),
                     val: type === 'text' ? el.querySelector('textarea').value : el.querySelector('img, video').src
                 });
             });
-            await sb.from('studio_sessions').upsert({ id: currentCode, data: items, drawing: canvas.toDataURL() });
+            await sb.from('studio_sessions').upsert({ 
+                id: currentCode, 
+                data: items, 
+                drawing: canvas.toDataURL(),
+                background: document.body.style.backgroundImage 
+            });
         };
 
         async function initialLoad() {
             const { data } = await sb.from('studio_sessions').select('*').eq('id', currentCode).single();
-            if (data) { renderItems(data.data); renderDrawing(data.drawing); }
+            if (data) { 
+                renderItems(data.data); 
+                renderDrawing(data.drawing); 
+                renderBackground(data.background);
+                history.push(data.drawing); 
+            }
         }
 
         function renderItems(items) {
@@ -174,6 +185,10 @@
             img.src = drawData;
         }
 
+        function renderBackground(bg) {
+            document.body.style.backgroundImage = bg || '';
+        }
+
         window.toggleMode = function(mode) {
             activeMode = (activeMode === mode) ? null : mode;
             canvas.classList.toggle('active', !!activeMode);
@@ -181,9 +196,23 @@
             document.getElementById('eraseBtn').classList.toggle('active', activeMode === 'erase');
         };
 
+        window.undo = function() {
+            if (history.length <= 1) return;
+            redoStack.push(history.pop());
+            renderDrawing(history[history.length - 1]);
+            pushUpdate();
+        };
+
+        window.redo = function() {
+            if (redoStack.length === 0) return;
+            const state = redoStack.pop();
+            history.push(state);
+            renderDrawing(state);
+            pushUpdate();
+        };
+
         window.setColor = function(c) { currentColor = c; if(activeMode !== 'draw') toggleMode('draw'); };
 
-        // --- INTERACTION LOGIC ---
         canvas.onpointerdown = (e) => { isDrawing = true; [lastX, lastY] = [e.clientX, e.clientY]; };
         canvas.onpointermove = (e) => {
             if (!isDrawing) return;
@@ -193,7 +222,12 @@
             ctx.globalCompositeOperation = activeMode === 'erase' ? "destination-out" : "source-over";
             ctx.stroke(); [lastX, lastY] = [e.clientX, e.clientY];
         };
-        canvas.onpointerup = () => { isDrawing = false; pushUpdate(); };
+        canvas.onpointerup = () => { 
+            isDrawing = false; 
+            history.push(canvas.toDataURL());
+            redoStack = []; 
+            pushUpdate(); 
+        };
 
         window.addItem = function(type, val = '', x = 100, y = 100, w = 300, h = 200, shouldPush = true) {
             const div = document.createElement('div');
@@ -225,38 +259,20 @@
         };
 
         function setupInteraction(item, handle, resizer) {
-            // Dragging Logic
             handle.onpointerdown = (e) => {
-                if(activeMode) toggleMode(activeMode); // Disable drawing when moving
-                let startX = e.clientX - item.offsetLeft;
-                let startY = e.clientY - item.offsetTop;
-                
-                document.onpointermove = (m) => {
-                    item.style.left = (m.clientX - startX) + 'px';
-                    item.style.top = (m.clientY - startY) + 'px';
-                };
-                document.onpointerup = () => { 
-                    document.onpointermove = null; 
-                    pushUpdate(); 
-                };
+                if(activeMode) toggleMode(activeMode);
+                let startX = e.clientX - item.offsetLeft, startY = e.clientY - item.offsetTop;
+                document.onpointermove = (m) => { item.style.left = (m.clientX - startX) + 'px'; item.style.top = (m.clientY - startY) + 'px'; };
+                document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
             };
-
-            // Resizing Logic
             resizer.onpointerdown = (e) => {
                 e.preventDefault(); e.stopPropagation();
-                let startW = item.offsetWidth;
-                let startH = item.offsetHeight;
-                let startX = e.clientX;
-                let startY = e.clientY;
-
+                let startW = item.offsetWidth, startH = item.offsetHeight, startX = e.clientX, startY = e.clientY;
                 document.onpointermove = (m) => {
                     item.style.width = Math.max(100, (startW + (m.clientX - startX))) + 'px';
                     item.style.height = Math.max(80, (startH + (m.clientY - startY))) + 'px';
                 };
-                document.onpointerup = () => { 
-                    document.onpointermove = null; 
-                    pushUpdate(); 
-                };
+                document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
             };
         }
 
@@ -268,13 +284,23 @@
             reader.readAsDataURL(file);
         };
 
+        window.uploadBackground = function(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.body.style.backgroundImage = `url('${e.target.result}')`;
+                pushUpdate();
+            };
+            reader.readAsDataURL(file);
+        };
+
         window.clearAll = async function() { 
             if(confirm("Erase Everything?")) { 
                 await sb.from('studio_sessions').delete().eq('id', currentCode);
                 location.reload();
             } 
         };
-
         window.onresize = resizeCanvas;
     </script>
 </body>
