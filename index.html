@@ -3,149 +3,66 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Studio Duo | Real-Time</title>
+<title>Studio Duo | Real-Time Board</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 :root {
   --bg-base: #fcfcfc;
-  --surface: rgba(255,255,255,0.85);
+  --surface: rgba(255,255,255,0.9);
   --accent: #111;
   --text-main: #222;
-  --border: rgba(0,0,0,0.08);
-  --shadow: 0 4px 20px rgba(0,0,0,0.05);
+  --border: rgba(0,0,0,0.1);
+  --shadow: 0 4px 20px rgba(0,0,0,0.08);
 }
 
 body, html {
-  margin:0;
-  padding:0;
-  height:100%;
-  width:100%;
-  font-family:-apple-system,BlinkMacSystemFont,"Inter",sans-serif;
-  background:var(--bg-base);
-  overflow:hidden;
-  touch-action:none;
-}
-
-#gate {
-  position:fixed;
-  inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:6000;
-}
-
-.gate-input {
-  border:none;
-  border-bottom:2px solid var(--border);
-  font-size:20px;
-  text-align:center;
-  letter-spacing:8px;
-  width:220px;
-  margin-bottom:20px;
-}
-
-.gate-btn {
-  background:var(--accent);
-  color:white;
-  border:none;
-  padding:12px 32px;
-  cursor:pointer;
+  margin:0; padding:0; height:100%; width:100%;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:var(--bg-base); overflow:hidden; touch-action:none;
 }
 
 #drawing-canvas {
-  position:absolute;
-  inset:0;
-  pointer-events:none;
+  position:absolute; inset:0; pointer-events:none; z-index:5;
 }
-
 #drawing-canvas.active {
-  pointer-events:auto;
-  cursor:crosshair;
+  pointer-events:auto; cursor:crosshair;
 }
 
-#desktop {
-  width:100vw;
-  height:100vh;
-  display:none;
-  position:relative;
-}
+#desktop { width:100vw; height:100vh; position:relative; }
 
 #taskbar {
-  position:fixed;
-  top:20px;
-  left:50%;
-  transform:translateX(-50%);
-  background:var(--surface);
-  padding:10px 20px;
-  border-radius:12px;
-  display:flex;
-  gap:15px;
-  align-items:center;
-  box-shadow:var(--shadow);
+  position:fixed; top:20px; left:50%; transform:translateX(-50%);
+  background:var(--surface); padding:8px 16px; border-radius:50px;
+  display:flex; gap:12px; align-items:center; box-shadow:var(--shadow);
+  z-index:100; backdrop-filter:blur(10px); border:1px solid var(--border);
 }
 
-.item {
-  position:absolute;
-  min-width:50px;
-  min-height:50px;
-  cursor:grab;
+#taskbar button {
+  background:none; border:none; padding:8px 12px; cursor:pointer;
+  font-weight:500; border-radius:20px; transition:0.2s;
 }
+#taskbar button:hover { background: rgba(0,0,0,0.05); }
+#taskbar button.active { background: var(--accent); color:white; }
 
+.item { position:absolute; min-width:100px; min-height:100px; cursor:grab; z-index:10; }
 .item-box {
-  background:var(--surface);
-  padding:32px 14px 14px;
-  border-radius:8px;
-  resize:both;
-  overflow:hidden;
-  box-shadow:var(--shadow);
+  background:white; padding:30px 10px 10px; border-radius:8px;
+  resize:both; overflow:hidden; box-shadow:var(--shadow); border:1px solid var(--border);
 }
-
 .item textarea {
-  width:100%;
-  height:140px;
-  border:none;
-  background:transparent;
-  resize:none;
+  width:100%; height:100%; border:none; background:transparent;
+  resize:none; outline:none; font-size:16px;
 }
+.item img { max-width:100%; height:auto; pointer-events:none; display:block; }
 
-.palette {
-  display:flex;
-  gap:6px;
-}
-
-.swatch {
-  width:16px;
-  height:16px;
-  border-radius:50%;
-  cursor:pointer;
-  border:1px solid rgba(0,0,0,0.1);
-}
-
-.swatch.active {
-  transform:scale(1.3);
-  border:1px solid var(--accent);
-}
-
-#sync-indicator {
-  font-size:9px;
-  color:#2a9d8f;
-  font-weight:bold;
-  opacity:0;
-}
+.palette { display:flex; gap:8px; margin-left:10px; border-left:1px solid var(--border); padding-left:15px; }
+.swatch { width:20px; height:20px; border-radius:50%; cursor:pointer; border:2px solid transparent; }
+.swatch.active { border-color: var(--accent); transform:scale(1.1); }
 </style>
 </head>
-
 <body>
-
-<div id="gate">
-  <div>
-    <input type="password" id="accessCode" class="gate-input" placeholder="PASSKEY">
-    <button class="gate-btn" onclick="unlock()">Enter</button>
-  </div>
-</div>
 
 <canvas id="drawing-canvas"></canvas>
 
@@ -154,214 +71,200 @@ body, html {
     <button onclick="addItem('text')">Text</button>
     <button onclick="document.getElementById('fileUp').click()">Media</button>
     <button onclick="document.getElementById('bgUp').click()">BG</button>
-    <button onclick="clearBackground()">Clear BG</button>
     <button id="drawBtn" onclick="toggleMode('draw')">Draw</button>
     <button id="eraseBtn" onclick="toggleMode('erase')">Erase</button>
-
+    
     <div class="palette">
       <div class="swatch active" style="background:#111" data-color="#111"></div>
       <div class="swatch" style="background:#e63946" data-color="#e63946"></div>
       <div class="swatch" style="background:#457b9d" data-color="#457b9d"></div>
     </div>
 
-    <input type="file" id="fileUp" hidden accept="image/*,video/*" onchange="uploadMedia(this)">
+    <input type="file" id="fileUp" hidden accept="image/*" onchange="uploadMedia(this)">
     <input type="file" id="bgUp" hidden accept="image/*" onchange="uploadBackground(this)">
-    <span id="sync-indicator">LIVE</span>
   </div>
 </div>
 
 <script>
-const SB_URL="https://djpcwjjjjwbpsvuqmxxt.supabase.co";
-const SB_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI";
-const supabase=window.supabase.createClient(SB_URL,SB_KEY);
+const SB_URL = "https://djpcwjjjjwbpsvuqmxxt.supabase.co";
+const SB_KEY = "YOUR_KEY_HERE"; 
+const supabase = window.supabase.createClient(SB_URL, SB_KEY);
 
-let currentRoom="";
-const canvas=document.getElementById("drawing-canvas");
-const ctx=canvas.getContext("2d");
+// We use one shared ID for everyone now
+const currentRoom = "shared-board-001"; 
 
-let isDrawing=false;
-let activeMode=null;
-let currentColor="#111";
+const canvas = document.getElementById("drawing-canvas");
+const ctx = canvas.getContext("2d");
+let isDrawing = false;
+let activeMode = null;
+let currentColor = "#111";
 
-function resizeCanvas(){
-  canvas.width=window.innerWidth;
-  canvas.height=window.innerHeight;
-}
+// --- AUTO-INITIALIZE ON LOAD ---
+window.onload = async () => {
+    resizeCanvas();
+    try {
+        let { data, error } = await supabase
+            .from("studio_duo")
+            .select("data")
+            .eq("id", currentRoom)
+            .maybeSingle();
 
-async function unlock(){
-  const input=document.getElementById("accessCode").value.trim();
-  if(!input)return;
+        if (error) throw error;
 
-  currentRoom=input;
-  document.getElementById("gate").style.display="none";
-  document.getElementById("desktop").style.display="block";
-  resizeCanvas();
+        // If no data exists yet for this shared ID, create it
+        if (!data) {
+            const blankState = { items: [], draw: "", bg: "" };
+            await supabase.from("studio_duo").insert([{ id: currentRoom, data: blankState }]);
+            data = { data: blankState };
+        }
 
-  supabase.channel("room-"+currentRoom)
-    .on("postgres_changes",{event:"UPDATE",schema:"public",table:"studio_duo",filter:`id=eq.${currentRoom}`},
-      payload=>renderFromData(payload.new.data))
-    .subscribe();
+        renderFromData(data.data);
 
-  const {data,error}=await supabase
-    .from("studio_duo")
-    .select("data")
-    .eq("id",currentRoom)
-    .maybeSingle();
+        // Realtime Sync
+        supabase.channel('board-sync')
+            .on('postgres_changes', { 
+                event: 'UPDATE', schema: 'public', table: 'studio_duo', filter: `id=eq.${currentRoom}` 
+            }, payload => renderFromData(payload.new.data))
+            .subscribe();
 
-  if(error){console.error(error);return;}
+    } catch (err) {
+        console.error("Auto-connect failed:", err.message);
+    }
+};
 
-  if(data)renderFromData(data.data);
-  else{
-    await supabase.from("studio_duo").insert([
-      {id:currentRoom,data:{items:[],draw:"",bg:""}}
-    ]);
-  }
-}
-
-async function pushToCloud(){
-  if(!currentRoom)return;
-  const items=[];
-  document.querySelectorAll(".item").forEach(el=>{
-    const c=el.querySelector(".content");
-    items.push({
-      type:el.dataset.type,
-      val:el.dataset.type==="text"?c.value:c.src,
-      x:el.style.left,
-      y:el.style.top,
-      w:el.style.width,
-      h:el.style.height
+async function pushToCloud() {
+    if (!currentRoom || isDrawing) return;
+    const items = [];
+    document.querySelectorAll(".item").forEach(el => {
+        const c = el.querySelector(".content");
+        items.push({
+            type: el.dataset.type,
+            val: el.dataset.type === "text" ? c.value : c.src,
+            x: el.style.left, y: el.style.top, w: el.style.width, h: el.style.height
+        });
     });
-  });
 
-  const state={
-    items,
-    draw:canvas.toDataURL(),
-    bg:document.body.style.backgroundImage
-  };
-
-  await supabase.from("studio_duo").update({data:state}).eq("id",currentRoom);
+    const state = { items, draw: canvas.toDataURL(), bg: document.body.style.backgroundImage };
+    await supabase.from("studio_duo").update({ data: state }).eq("id", currentRoom);
 }
 
-function renderFromData(data){
-  if(!data||isDrawing)return;
+function renderFromData(data) {
+    if (!data || isDrawing) return;
+    document.querySelectorAll(".item").forEach(i => i.remove());
+    if (data.items) {
+        data.items.forEach(d => addItem(d.type, d.val, d.x, d.y, d.w, d.h, true));
+    }
+    if (data.draw) {
+        const img = new Image();
+        img.onload = () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+        };
+        img.src = data.draw;
+    }
+    if (data.bg) document.body.style.backgroundImage = data.bg;
+}
 
-  document.querySelectorAll(".item").forEach(i=>i.remove());
-  data.items.forEach(d=>addItem(d.type,d.val,d.x,d.y,d.w,d.h,true,true));
+function addItem(type, val="", x="150px", y="150px", w="220px", h="auto", isLoading=false) {
+    const div = document.createElement("div");
+    div.className = "item item-box";
+    div.dataset.type = type;
+    div.style.left = x; div.style.top = y; div.style.width = w; div.style.height = h;
 
-  if(data.draw){
-    const img=new Image();
-    img.onload=()=>{
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      ctx.drawImage(img,0,0);
+    const content = document.createElement(type === "text" ? "textarea" : "img");
+    content.className = "content";
+    if (type === "text") {
+        content.value = val;
+        content.onblur = () => pushToCloud();
+    } else {
+        content.src = val;
+    }
+
+    div.appendChild(content);
+    document.getElementById("desktop").appendChild(div);
+    makeDraggable(div);
+    if (!isLoading) pushToCloud();
+}
+
+function makeDraggable(el) {
+    el.onmousedown = e => {
+        if (e.target.tagName === 'TEXTAREA') return; 
+        let shiftX = e.clientX - el.getBoundingClientRect().left;
+        let shiftY = e.clientY - el.getBoundingClientRect().top;
+        function moveAt(pageX, pageY) {
+            el.style.left = pageX - shiftX + 'px';
+            el.style.top = pageY - shiftY + 'px';
+        }
+        function onMouseMove(e) { moveAt(e.clientX, e.clientY); }
+        document.addEventListener('mousemove', onMouseMove);
+        document.onmouseup = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            pushToCloud();
+        };
     };
-    img.src=data.draw;
-  }
-
-  if(data.bg)document.body.style.backgroundImage=data.bg;
 }
 
-function toggleMode(mode){
-  activeMode=activeMode===mode?null:mode;
-  canvas.classList.toggle("active",!!activeMode);
+function toggleMode(mode) {
+    activeMode = (activeMode === mode) ? null : mode;
+    document.getElementById("drawBtn").classList.toggle("active", activeMode === 'draw');
+    document.getElementById("eraseBtn").classList.toggle("active", activeMode === 'erase');
+    canvas.classList.toggle("active", !!activeMode);
 }
 
-function addItem(type,val="",x="100px",y="120px",w="auto",h="auto",_,isLoading=false){
-  const div=document.createElement("div");
-  div.className="item item-box";
-  div.dataset.type=type;
-  div.style.left=x;
-  div.style.top=y;
-  div.style.width=w;
-  div.style.height=h;
-
-  const content=document.createElement(type==="text"?"textarea":"img");
-  content.className="content";
-  if(type==="text"){
-    content.value=val;
-    content.onblur=pushToCloud;
-  }else{
-    content.src=val;
-  }
-
-  div.appendChild(content);
-  makeDraggable(div);
-  document.getElementById("desktop").appendChild(div);
-
-  if(!isLoading)pushToCloud();
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 }
 
-function makeDraggable(el){
-  el.onmousedown=e=>{
-    let x=e.clientX,y=e.clientY;
-    document.onmousemove=e2=>{
-      el.style.left=el.offsetLeft+(e2.clientX-x)+"px";
-      el.style.top=el.offsetTop+(e2.clientY-y)+"px";
-      x=e2.clientX;y=e2.clientY;
+function uploadMedia(input) {
+    const reader = new FileReader();
+    reader.onload = e => addItem("image", e.target.result);
+    reader.readAsDataURL(input.files[0]);
+}
+
+function uploadBackground(input) {
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.body.style.backgroundImage = `url('${e.target.result}')`;
+        pushToCloud();
     };
-    document.onmouseup=()=>{
-      document.onmousemove=null;
-      pushToCloud();
-    };
-  };
+    reader.readAsDataURL(input.files[0]);
 }
 
-function clearBackground(){
-  document.body.style.backgroundImage="none";
-  pushToCloud();
-}
-
-function uploadMedia(input){
-  const file=input.files[0];
-  const reader=new FileReader();
-  reader.onload=e=>addItem("image",e.target.result);
-  reader.readAsDataURL(file);
-}
-
-function uploadBackground(input){
-  const reader=new FileReader();
-  reader.onload=e=>{
-    document.body.style.backgroundImage=`url('${e.target.result}')`;
-    pushToCloud();
-  };
-  reader.readAsDataURL(input.files[0]);
-}
-
-canvas.onpointerdown=e=>{
-  if(!activeMode)return;
-  isDrawing=true;
-  ctx.beginPath();
-  ctx.moveTo(e.clientX,e.clientY);
+canvas.onpointerdown = e => {
+    if (!activeMode) return;
+    isDrawing = true;
+    ctx.beginPath();
+    ctx.moveTo(e.clientX, e.clientY);
 };
 
-canvas.onpointermove=e=>{
-  if(!isDrawing)return;
-  ctx.lineTo(e.clientX,e.clientY);
-  ctx.lineWidth=activeMode==="erase"?40:10;
-  ctx.globalCompositeOperation=
-    activeMode==="erase"?"destination-out":"source-over";
-  ctx.strokeStyle=currentColor;
-  ctx.stroke();
+canvas.onpointermove = e => {
+    if (!isDrawing) return;
+    ctx.lineTo(e.clientX, e.clientY);
+    ctx.lineWidth = activeMode === "erase" ? 50 : 5;
+    ctx.globalCompositeOperation = activeMode === "erase" ? "destination-out" : "source-over";
+    ctx.strokeStyle = currentColor;
+    ctx.lineCap = "round";
+    ctx.stroke();
 };
 
-window.onpointerup=()=>{
-  if(isDrawing){
-    isDrawing=false;
-    pushToCloud();
-  }
+window.onpointerup = () => {
+    if (isDrawing) {
+        isDrawing = false;
+        pushToCloud();
+    }
 };
 
-document.querySelectorAll(".swatch").forEach(s=>{
-  s.onclick=()=>{
-    document.querySelectorAll(".swatch").forEach(sw=>sw.classList.remove("active"));
-    s.classList.add("active");
-    currentColor=s.dataset.color;
-    toggleMode("draw");
-  };
+document.querySelectorAll(".swatch").forEach(s => {
+    s.onclick = () => {
+        document.querySelectorAll(".swatch").forEach(sw => sw.classList.remove("active"));
+        s.classList.add("active");
+        currentColor = s.dataset.color;
+        if (activeMode !== 'draw') toggleMode('draw');
+    };
 });
 
-resizeCanvas();
-window.onresize=resizeCanvas;
+window.onresize = resizeCanvas;
 </script>
-
 </body>
 </html>
