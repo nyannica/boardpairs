@@ -63,6 +63,10 @@
         .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 8px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
         .tool-btn.active { opacity: 1; border-bottom: 2px solid var(--accent); }
         .swatch { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); }
+        
+        /* Slider Styling */
+        .size-slider { width: 60px; height: 4px; cursor: pointer; accent-color: var(--accent); }
+        .slider-label { font-size: 9px; font-weight: 700; opacity: 0.6; margin-right: -5px; }
     </style>
 </head>
 <body>
@@ -78,38 +82,50 @@
         <div id="taskbar">
             <button class="tool-btn" onclick="addItem('text')">Text</button>
             <button class="tool-btn" onclick="document.getElementById('fileUp').click()">Media</button>
-            <button class="tool-btn" onclick="document.getElementById('bgUp').click()">BG</button>
-            <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
-            <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
+            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 2px; align-items: center;">
+                <button class="tool-btn" onclick="document.getElementById('bgUp').click()">BG</button>
+                <button class="tool-btn" onclick="removeBackground()" style="font-size: 8px; color: #888;">RMV BG</button>
+            </div>
+            
+            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 8px; align-items: center;">
+                <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
+                <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
+                <span class="slider-label">SIZE</span>
+                <input type="range" class="size-slider" id="brushSize" min="1" max="50" value="3">
+            </div>
+
             <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 5px;">
                 <button class="tool-btn" onclick="undo()">⟲</button>
                 <button class="tool-btn" onclick="redo()">⟳</button>
             </div>
+
             <div style="display:flex; gap:8px; padding: 0 10px; border-left: 1px solid var(--border)">
                 <div class="swatch" style="background:#111" onclick="setColor('#111')"></div>
                 <div class="swatch" style="background:#e63946" onclick="setColor('#e63946')"></div>
                 <div class="swatch" style="background:#457b9d" onclick="setColor('#457b9d')"></div>
             </div>
             <button class="tool-btn" onclick="clearAll()" style="color:red">Reset</button>
+            
             <input type="file" id="fileUp" hidden onchange="uploadMedia(this)">
             <input type="file" id="bgUp" hidden onchange="uploadBackground(this)">
         </div>
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://djpcwjjjjwbpsvuqmxxt.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI';
+        const SUPABASE_URL = 'https://YOUR_PROJECT_URL.supabase.co';
+        const SUPABASE_KEY = 'YOUR_ANON_KEY';
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let currentCode = "";
         const canvas = document.getElementById('drawing-canvas');
         const ctx = canvas.getContext('2d');
+        const sizeInput = document.getElementById('brushSize');
+        
         let isDrawing = false;
         let activeMode = null;
         let currentColor = "#111111";
         let lastX = 0, lastY = 0;
 
-        // History Stacks
         let history = [];
         let redoStack = [];
 
@@ -168,7 +184,7 @@
                 renderItems(data.data); 
                 renderDrawing(data.drawing); 
                 renderBackground(data.background);
-                history.push(data.drawing); 
+                history = [data.drawing || canvas.toDataURL()];
             }
         }
 
@@ -185,9 +201,9 @@
             img.src = drawData;
         }
 
-        function renderBackground(bg) {
-            document.body.style.backgroundImage = bg || '';
-        }
+        function renderBackground(bg) { document.body.style.backgroundImage = bg || ''; }
+
+        window.removeBackground = function() { document.body.style.backgroundImage = ''; pushUpdate(); };
 
         window.toggleMode = function(mode) {
             activeMode = (activeMode === mode) ? null : mode;
@@ -199,7 +215,8 @@
         window.undo = function() {
             if (history.length <= 1) return;
             redoStack.push(history.pop());
-            renderDrawing(history[history.length - 1]);
+            const previousState = history[history.length - 1];
+            renderDrawing(previousState);
             pushUpdate();
         };
 
@@ -213,18 +230,34 @@
 
         window.setColor = function(c) { currentColor = c; if(activeMode !== 'draw') toggleMode('draw'); };
 
-        canvas.onpointerdown = (e) => { isDrawing = true; [lastX, lastY] = [e.clientX, e.clientY]; };
+        canvas.onpointerdown = (e) => { 
+            isDrawing = true; 
+            [lastX, lastY] = [e.clientX, e.clientY]; 
+        };
+
         canvas.onpointermove = (e) => {
             if (!isDrawing) return;
-            ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(e.clientX, e.clientY);
-            ctx.lineWidth = activeMode === 'erase' ? 40 : 3;
-            ctx.lineCap = "round"; ctx.strokeStyle = currentColor;
+            ctx.beginPath(); 
+            ctx.moveTo(lastX, lastY); 
+            ctx.lineTo(e.clientX, e.clientY);
+            
+            // Apply slider size
+            const size = parseInt(sizeInput.value);
+            ctx.lineWidth = activeMode === 'erase' ? size * 2 : size;
+            
+            ctx.lineCap = "round"; 
+            ctx.strokeStyle = currentColor;
             ctx.globalCompositeOperation = activeMode === 'erase' ? "destination-out" : "source-over";
-            ctx.stroke(); [lastX, lastY] = [e.clientX, e.clientY];
+            ctx.stroke(); 
+            [lastX, lastY] = [e.clientX, e.clientY];
         };
+
         canvas.onpointerup = () => { 
+            if (!isDrawing) return;
             isDrawing = false; 
-            history.push(canvas.toDataURL());
+            const currentState = canvas.toDataURL();
+            history.push(currentState);
+            if (history.length > 50) history.shift(); // Limit history to save memory
             redoStack = []; 
             pushUpdate(); 
         };
