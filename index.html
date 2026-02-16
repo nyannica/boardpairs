@@ -22,6 +22,9 @@
         .item-box { background: var(--surface); backdrop-filter: blur(15px); padding: 32px 14px 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--shadow); resize: both; overflow: hidden; }
         .item-transparent { padding: 10px; cursor: grab; background: transparent; }
         
+        /* Visual Resize Handle */
+        .item-box::after { content: ""; position: absolute; bottom: 0; right: 0; width: 15px; height: 15px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1) 60%, transparent 60%, transparent 70%, rgba(0,0,0,0.1) 70%); }
+
         .item textarea { width: 100%; height: 140px; border: none; resize: none; outline: none; background: transparent; color: var(--text-main); font-size: 14px; line-height: 1.6; font-family: inherit; }
         .item img, .item video { max-width: 100%; display: block; pointer-events: none; border-radius: 4px; }
         .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 4px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
@@ -81,10 +84,17 @@
             const input = document.getElementById('accessCode').value;
             if (input.length < 2) return;
             currentRoom = input;
+            
             document.getElementById('gate').style.display = "none";
             document.getElementById('desktop').style.display = "block";
             resizeCanvas();
-            supabase.channel('any').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_duo', filter: `id=eq.${currentRoom}` }, payload => { renderFromData(payload.new.data); }).subscribe();
+
+            // Realtime Sync Subscription
+            supabase.channel('room-' + currentRoom)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_duo', filter: `id=eq.${currentRoom}` }, 
+            payload => { renderFromData(payload.new.data); })
+            .subscribe();
+
             const { data } = await supabase.from('studio_duo').select('data').eq('id', currentRoom).single();
             if (data) renderFromData(data.data);
             else await supabase.from('studio_duo').insert([{ id: currentRoom, data: { items: [], draw: "", bg: "" } }]);
@@ -96,6 +106,7 @@
         }
 
         async function pushToCloud() {
+            if(!currentRoom) return;
             document.getElementById('sync-indicator').style.opacity = 1;
             const items = [];
             document.querySelectorAll('.item').forEach(el => {
@@ -103,16 +114,12 @@
                 items.push({ 
                     type: el.dataset.type, 
                     val: el.dataset.type === 'text' ? c.value : c.src, 
-                    x: el.style.left, 
-                    y: el.style.top, 
-                    w: el.style.width, 
-                    h: el.style.height, 
-                    trans: el.dataset.trans === "true" 
+                    x: el.style.left, y: el.style.top, w: el.style.width, h: el.style.height, trans: el.dataset.trans === "true" 
                 });
             });
             const state = { items, draw: canvas.toDataURL(), bg: document.body.style.backgroundImage };
             await supabase.from('studio_duo').update({ data: state }).eq('id', currentRoom);
-            setTimeout(() => { document.getElementById('sync-indicator').style.opacity = 0; }, 1000);
+            setTimeout(() => { document.getElementById('sync-indicator').style.opacity = 0; }, 800);
         }
 
         function renderFromData(data) {
@@ -159,7 +166,6 @@
         function makeDraggable(el) {
             let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
             
-            // Mouse/Touch Start
             const startDrag = (e) => {
                 if (['TEXTAREA', 'BUTTON', 'VIDEO'].includes(e.target.tagName)) return;
                 
@@ -167,26 +173,20 @@
                 const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
                 const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
 
-                // FIX: Check if clicking the resize corner (bottom-right 20px)
-                const isResizeHandle = (clientX > rect.right - 25 && clientY > rect.bottom - 25);
-                if (isResizeHandle) return;
+                // Stop dragging if cursor is in the resize zone (bottom-right 25px)
+                if (clientX > rect.right - 25 && clientY > rect.bottom - 25) return;
 
-                p3 = clientX;
-                p4 = clientY;
-                
+                p3 = clientX; p4 = clientY;
                 document.onmousemove = document.ontouchmove = (e) => {
                     const cx = (e.touches ? e.touches[0].clientX : e.clientX);
                     const cy = (e.touches ? e.touches[0].clientY : e.clientY);
                     p1 = p3 - cx; p2 = p4 - cy; p3 = cx; p4 = cy;
                     el.style.top = (el.offsetTop - p2) + "px"; el.style.left = (el.offsetLeft - p1) + "px";
                 };
-                
                 document.onmouseup = document.ontouchend = () => { 
-                    document.onmousemove = document.ontouchmove = null; 
-                    pushToCloud(); 
+                    document.onmousemove = document.ontouchmove = null; pushToCloud(); 
                 };
             };
-
             el.onmousedown = el.ontouchstart = startDrag;
         }
 
@@ -208,7 +208,7 @@
             reader.readAsDataURL(input.files[0]);
         }
 
-        // Pointer Events for Pressure Sensitivity
+        // --- Pressure Sensitivity ---
         canvas.onpointerdown = (e) => { 
             if(!activeMode) return;
             isDrawing = true; ctx.beginPath(); 
@@ -219,10 +219,8 @@
         canvas.onpointermove = (e) => {
             if(!isDrawing) return;
             const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
             
-            ctx.lineTo(x, y);
             const pressure = e.pressure > 0 ? e.pressure : 0.5;
             ctx.lineWidth = activeMode === 'erase' ? 40 * pressure : 10 * pressure;
             ctx.lineCap = 'round';
