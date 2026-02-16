@@ -8,10 +8,13 @@
     <style>
         :root { --bg-base: #fcfcfc; --surface: rgba(255, 255, 255, 0.85); --accent: #111111; --text-main: #222222; --border: rgba(0, 0, 0, 0.08); --shadow: 0 4px 20px rgba(0, 0, 0, 0.05); }
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; background-color: var(--bg-base); background-size: cover; background-position: center; color: var(--text-main); overflow: hidden; touch-action: none; }
+        
+        /* Entrance Gate */
         #gate { position: fixed; inset: 0; background: var(--bg-base); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 6000; }
         .gate-input { background: transparent; border: none; border-bottom: 2px solid var(--border); color: var(--text-main); font-size: 20px; text-align: center; outline: none; padding: 10px; letter-spacing: 8px; width: 220px; margin-bottom: 20px; }
         .gate-btn { background: var(--accent); color: white; border: none; padding: 12px 32px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; border-radius: 4px; }
         
+        /* Canvas Layering: Use auto to allow interaction with UI [cite: 14] */
         #drawing-canvas { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; }
         #drawing-canvas.active { z-index: 2500; pointer-events: auto; cursor: crosshair; }
         
@@ -20,16 +23,22 @@
         
         .item { position: absolute; min-width: 50px; min-height: 50px; z-index: 10; cursor: grab; }
         .item-box { background: var(--surface); backdrop-filter: blur(15px); padding: 32px 14px 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--shadow); resize: both; overflow: hidden; }
-        .item-transparent { padding: 10px; cursor: grab; background: transparent; }
         
         /* Visual Resize Handle */
-        .item-box::after { content: ""; position: absolute; bottom: 0; right: 0; width: 15px; height: 15px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1) 60%, transparent 60%, transparent 70%, rgba(0,0,0,0.1) 70%); }
+        .item-box::after { 
+            content: ""; position: absolute; bottom: 0; right: 0; width: 15px; height: 15px; 
+            cursor: nwse-resize; 
+            background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1) 60%, transparent 60%, transparent 70%, rgba(0,0,0,0.1) 70%); 
+        }
 
+        .item-transparent { padding: 10px; cursor: grab; background: transparent; }
         .item textarea { width: 100%; height: 140px; border: none; resize: none; outline: none; background: transparent; color: var(--text-main); font-size: 14px; line-height: 1.6; font-family: inherit; }
         .item img, .item video { max-width: 100%; display: block; pointer-events: none; border-radius: 4px; }
+        
         .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 4px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
         .tool-btn.active { opacity: 1; border-bottom: 2px solid var(--accent); }
         .close-btn { position: absolute; top: 8px; right: 10px; border: none; background: none; cursor: pointer; color: #aaa; font-size: 10px; }
+        
         .palette { display: flex; gap: 6px; border-left: 1px solid var(--border); padding-left: 15px; }
         .swatch { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); }
         .swatch.active { transform: scale(1.3); border: 1px solid var(--accent); }
@@ -85,19 +94,24 @@
             if (input.length < 2) return;
             currentRoom = input;
             
+            // UI Transition
             document.getElementById('gate').style.display = "none";
             document.getElementById('desktop').style.display = "block";
             resizeCanvas();
 
-            // Realtime Sync Subscription
+            // Setup Realtime with unique room channel
             supabase.channel('room-' + currentRoom)
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_duo', filter: `id=eq.${currentRoom}` }, 
-            payload => { renderFromData(payload.new.data); })
-            .subscribe();
+                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_duo', filter: `id=eq.${currentRoom}` }, 
+                    payload => { renderFromData(payload.new.data); })
+                .subscribe();
 
-            const { data } = await supabase.from('studio_duo').select('data').eq('id', currentRoom).single();
-            if (data) renderFromData(data.data);
-            else await supabase.from('studio_duo').insert([{ id: currentRoom, data: { items: [], draw: "", bg: "" } }]);
+            // Initial Load logic [cite: 41, 42]
+            const { data, error } = await supabase.from('studio_duo').select('data').eq('id', currentRoom).single();
+            if (data) {
+                renderFromData(data.data);
+            } else {
+                await supabase.from('studio_duo').insert([{ id: currentRoom, data: { items: [], draw: "", bg: "" } }]);
+            }
         }
 
         function resizeCanvas() {
@@ -165,7 +179,6 @@
 
         function makeDraggable(el) {
             let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
-            
             const startDrag = (e) => {
                 if (['TEXTAREA', 'BUTTON', 'VIDEO'].includes(e.target.tagName)) return;
                 
@@ -173,7 +186,7 @@
                 const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
                 const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
 
-                // Stop dragging if cursor is in the resize zone (bottom-right 25px)
+                // Ignore dragging if clicking the visual resize zone [cite: 19]
                 if (clientX > rect.right - 25 && clientY > rect.bottom - 25) return;
 
                 p3 = clientX; p4 = clientY;
@@ -208,7 +221,7 @@
             reader.readAsDataURL(input.files[0]);
         }
 
-        // --- Pressure Sensitivity ---
+        // --- Pen Sensitivity Pressure [cite: 80] ---
         canvas.onpointerdown = (e) => { 
             if(!activeMode) return;
             isDrawing = true; ctx.beginPath(); 
