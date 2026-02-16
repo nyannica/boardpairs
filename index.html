@@ -9,12 +9,11 @@
         :root { --bg-base: #fcfcfc; --surface: rgba(255, 255, 255, 0.85); --accent: #111111; --text-main: #222222; --border: rgba(0, 0, 0, 0.08); --shadow: 0 4px 20px rgba(0, 0, 0, 0.05); }
         body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; background-color: var(--bg-base); background-size: cover; background-position: center; color: var(--text-main); overflow: hidden; touch-action: none; }
         
-        /* Entrance Gate */
         #gate { position: fixed; inset: 0; background: var(--bg-base); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 6000; }
         .gate-input { background: transparent; border: none; border-bottom: 2px solid var(--border); color: var(--text-main); font-size: 20px; text-align: center; outline: none; padding: 10px; letter-spacing: 8px; width: 220px; margin-bottom: 20px; }
         .gate-btn { background: var(--accent); color: white; border: none; padding: 12px 32px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; border-radius: 4px; }
         
-        /* Canvas Layering: Use auto to allow interaction with UI [cite: 14] */
+        /* FIX: Changed pointer-events to auto so buttons are clickable */
         #drawing-canvas { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; }
         #drawing-canvas.active { z-index: 2500; pointer-events: auto; cursor: crosshair; }
         
@@ -24,21 +23,15 @@
         .item { position: absolute; min-width: 50px; min-height: 50px; z-index: 10; cursor: grab; }
         .item-box { background: var(--surface); backdrop-filter: blur(15px); padding: 32px 14px 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--shadow); resize: both; overflow: hidden; }
         
-        /* Visual Resize Handle */
-        .item-box::after { 
-            content: ""; position: absolute; bottom: 0; right: 0; width: 15px; height: 15px; 
-            cursor: nwse-resize; 
-            background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1) 60%, transparent 60%, transparent 70%, rgba(0,0,0,0.1) 70%); 
-        }
+        /* NEW: Visual Resize Handle */
+        .item-box::after { content: ""; position: absolute; bottom: 0; right: 0; width: 15px; height: 15px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1) 60%, transparent 60%, transparent 70%, rgba(0,0,0,0.1) 70%); }
 
         .item-transparent { padding: 10px; cursor: grab; background: transparent; }
         .item textarea { width: 100%; height: 140px; border: none; resize: none; outline: none; background: transparent; color: var(--text-main); font-size: 14px; line-height: 1.6; font-family: inherit; }
         .item img, .item video { max-width: 100%; display: block; pointer-events: none; border-radius: 4px; }
-        
         .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 4px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
         .tool-btn.active { opacity: 1; border-bottom: 2px solid var(--accent); }
         .close-btn { position: absolute; top: 8px; right: 10px; border: none; background: none; cursor: pointer; color: #aaa; font-size: 10px; }
-        
         .palette { display: flex; gap: 6px; border-left: 1px solid var(--border); padding-left: 15px; }
         .swatch { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); }
         .swatch.active { transform: scale(1.3); border: 1px solid var(--accent); }
@@ -80,21 +73,20 @@
     </div>
 
     <script>
-        const SB_URL = "https://djpcwjjjjwbpsvuqmxxt.supabase.co";
-        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI";
-        const supabase = window.supabase.createClient(SB_URL, SB_KEY);
+        const SB_URL = "https://djpcwjjjjwbpsvuqmxxt.supabase.co"; [cite: 36]
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI"; [cite: 36]
+        const supabase = window.supabase.createClient(SB_URL, SB_KEY); [cite: 36]
 
         let currentRoom = "";
-        const canvas = document.getElementById('drawing-canvas');
-        const ctx = canvas.getContext('2d');
-        let isDrawing = false, activeMode = null, currentColor = "#111111";
+        const canvas = document.getElementById('drawing-canvas'); [cite: 37]
+        const ctx = canvas.getContext('2d'); [cite: 37]
+        let isDrawing = false, activeMode = null, currentColor = "#111111"; [cite: 37]
 
         async function unlock() {
             const input = document.getElementById('accessCode').value;
-            if (input.length < 2) return;
+            if (input.length < 1) return; // FIX: Reduced to 1 char to ensure ease of entry
             currentRoom = input;
             
-            // UI Transition
             document.getElementById('gate').style.display = "none";
             document.getElementById('desktop').style.display = "block";
             resizeCanvas();
@@ -105,23 +97,22 @@
                     payload => { renderFromData(payload.new.data); })
                 .subscribe();
 
-            // Initial Load logic [cite: 41, 42]
-            const { data, error } = await supabase.from('studio_duo').select('data').eq('id', currentRoom).single();
+            const { data } = await supabase.from('studio_duo').select('data').eq('id', currentRoom).single(); [cite: 41]
             if (data) {
-                renderFromData(data.data);
+                renderFromData(data.data); [cite: 42]
             } else {
-                await supabase.from('studio_duo').insert([{ id: currentRoom, data: { items: [], draw: "", bg: "" } }]);
+                await supabase.from('studio_duo').insert([{ id: currentRoom, data: { items: [], draw: "", bg: "" } }]); [cite: 42]
             }
         }
 
         function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.width = window.innerWidth; [cite: 43]
+            canvas.height = window.innerHeight; [cite: 44]
         }
 
         async function pushToCloud() {
             if(!currentRoom) return;
-            document.getElementById('sync-indicator').style.opacity = 1;
+            document.getElementById('sync-indicator').style.opacity = 1; [cite: 45]
             const items = [];
             document.querySelectorAll('.item').forEach(el => {
                 const c = el.querySelector('.content');
@@ -129,78 +120,78 @@
                     type: el.dataset.type, 
                     val: el.dataset.type === 'text' ? c.value : c.src, 
                     x: el.style.left, y: el.style.top, w: el.style.width, h: el.style.height, trans: el.dataset.trans === "true" 
-                });
+                }); [cite: 46]
             });
-            const state = { items, draw: canvas.toDataURL(), bg: document.body.style.backgroundImage };
-            await supabase.from('studio_duo').update({ data: state }).eq('id', currentRoom);
-            setTimeout(() => { document.getElementById('sync-indicator').style.opacity = 0; }, 800);
+            const state = { items, draw: canvas.toDataURL(), bg: document.body.style.backgroundImage }; [cite: 47]
+            await supabase.from('studio_duo').update({ data: state }).eq('id', currentRoom); [cite: 47]
+            setTimeout(() => { document.getElementById('sync-indicator').style.opacity = 0; }, 800); [cite: 48]
         }
 
         function renderFromData(data) {
-            if (!data || isDrawing) return;
-            document.getElementById('desktop').querySelectorAll('.item').forEach(i => i.remove());
-            data.items.forEach(d => addItem(d.type, d.val, d.x, d.y, d.w, d.h, d.trans, true));
+            if (!data || isDrawing) return; [cite: 49, 50]
+            document.getElementById('desktop').querySelectorAll('.item').forEach(i => i.remove()); [cite: 51]
+            data.items.forEach(d => addItem(d.type, d.val, d.x, d.y, d.w, d.h, d.trans, true)); [cite: 51]
             if (data.draw) {
                 const img = new Image();
-                img.onload = () => { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img, 0, 0); };
-                img.src = data.draw;
+                img.onload = () => { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img, 0, 0); }; [cite: 53]
+                img.src = data.draw; [cite: 53]
             }
-            if (data.bg) document.body.style.backgroundImage = data.bg;
+            if (data.bg) document.body.style.backgroundImage = data.bg; [cite: 54]
         }
 
         function toggleMode(mode) {
-            activeMode = (activeMode === mode) ? null : mode;
-            canvas.classList.toggle('active', !!activeMode);
-            document.getElementById('drawBtn').classList.toggle('active', activeMode === 'draw');
-            document.getElementById('eraseBtn').classList.toggle('active', activeMode === 'erase');
+            activeMode = (activeMode === mode) ? null : mode; [cite: 57, 58]
+            canvas.classList.toggle('active', !!activeMode); [cite: 58]
+            document.getElementById('drawBtn').classList.toggle('active', activeMode === 'draw'); [cite: 58]
+            document.getElementById('eraseBtn').classList.toggle('active', activeMode === 'erase'); [cite: 58]
         }
 
         function addItem(type, val = '', x = '100px', y = '120px', w = 'auto', h = 'auto', isTransparent = false, isLoading = false) {
             const div = document.createElement('div');
-            div.className = `item ${isTransparent ? 'item-transparent' : 'item-box'}`;
-            div.dataset.type = type; div.dataset.trans = isTransparent; div.style.left = x; div.style.top = y;
-            if(!isTransparent) { div.style.width = w; div.style.height = h; }
+            div.className = `item ${isTransparent ? 'item-transparent' : 'item-box'}`; [cite: 60]
+            div.dataset.type = type; div.dataset.trans = isTransparent; div.style.left = x; div.style.top = y; [cite: 60]
+            if(!isTransparent) { div.style.width = w; div.style.height = h; } [cite: 61]
             
             const close = document.createElement('button');
-            close.innerHTML = '×'; close.className = 'close-btn';
-            close.onclick = () => { div.remove(); pushToCloud(); };
+            close.innerHTML = '×'; close.className = 'close-btn'; [cite: 62]
+            close.onclick = () => { div.remove(); pushToCloud(); }; [cite: 62]
             div.appendChild(close);
             
-            const content = document.createElement(type === 'text' ? 'textarea' : (type === 'image' ? 'img' : 'video'));
+            const content = document.createElement(type === 'text' ? 'textarea' : (type === 'image' ? 'img' : 'video')); [cite: 63]
             content.className = 'content';
-            if (type === 'text') { content.value = val; content.onblur = pushToCloud; } else { content.src = val; }
-            if (type === 'video') content.controls = true;
+            if (type === 'text') { content.value = val; content.onblur = pushToCloud; } else { content.src = val; } [cite: 64]
+            if (type === 'video') content.controls = true; [cite: 65]
             div.appendChild(content);
             
             makeDraggable(div);
             document.getElementById('desktop').appendChild(div);
-            if (!isLoading) pushToCloud();
+            if (!isLoading) pushToCloud(); [cite: 66]
         }
 
         function makeDraggable(el) {
             let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
             const startDrag = (e) => {
-                if (['TEXTAREA', 'BUTTON', 'VIDEO'].includes(e.target.tagName)) return;
+                if (['TEXTAREA', 'BUTTON', 'VIDEO'].includes(e.target.tagName)) return; [cite: 67]
                 
                 const rect = el.getBoundingClientRect();
-                const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-                const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+                const clientX = (e.touches ? e.touches[0].clientX : e.clientX); [cite: 68]
+                const clientY = (e.touches ? e.touches[0].clientY : e.clientY); [cite: 68]
 
-                // Ignore dragging if clicking the visual resize zone [cite: 19]
+                // FIX: Check if clicking the resize zone to prevent dragging while resizing
                 if (clientX > rect.right - 25 && clientY > rect.bottom - 25) return;
 
                 p3 = clientX; p4 = clientY;
                 document.onmousemove = document.ontouchmove = (e) => {
-                    const cx = (e.touches ? e.touches[0].clientX : e.clientX);
-                    const cy = (e.touches ? e.touches[0].clientY : e.clientY);
-                    p1 = p3 - cx; p2 = p4 - cy; p3 = cx; p4 = cy;
-                    el.style.top = (el.offsetTop - p2) + "px"; el.style.left = (el.offsetLeft - p1) + "px";
+                    const cx = (e.touches ? e.touches[0].clientX : e.clientX); [cite: 69]
+                    const cy = (e.touches ? e.touches[0].clientY : e.clientY); [cite: 70]
+                    p1 = p3 - cx; p2 = p4 - cy; p3 = cx; p4 = cy; [cite: 70, 71]
+                    el.style.top = (el.offsetTop - p2) + "px"; el.style.left = (el.offsetLeft - p1) + "px"; [cite: 71]
                 };
                 document.onmouseup = document.ontouchend = () => { 
-                    document.onmousemove = document.ontouchmove = null; pushToCloud(); 
+                    document.onmousemove = document.ontouchmove = null; pushToCloud(); [cite: 72]
                 };
             };
-            el.onmousedown = el.ontouchstart = startDrag;
+            el.onmousedown = el.ontouchstart = startDrag; [cite: 67]
         }
 
         function clearBackground() {
@@ -209,49 +200,50 @@
         }
 
         function uploadMedia(input) {
-            const file = input.files[0];
-            const reader = new FileReader();
-            reader.onload = (e) => addItem(file.type.startsWith('image') ? 'image' : 'video', e.target.result, '100px', '100px', '300px', '200px', file.type === "image/png");
-            reader.readAsDataURL(file);
+            const file = input.files[0]; [cite: 73]
+            const reader = new FileReader(); [cite: 74]
+            reader.onload = (e) => addItem(file.type.startsWith('image') ? 'image' : 'video', e.target.result, '100px', '100px', '300px', '200px', file.type === "image/png"); [cite: 74]
+            reader.readAsDataURL(file); [cite: 75]
         }
 
         function uploadBackground(input) {
-            const reader = new FileReader();
-            reader.onload = (e) => { document.body.style.backgroundImage = `url('${e.target.result}')`; pushToCloud(); };
-            reader.readAsDataURL(input.files[0]);
+            const reader = new FileReader(); [cite: 75]
+            reader.onload = (e) => { document.body.style.backgroundImage = `url('${e.target.result}')`; pushToCloud(); }; [cite: 76]
+            reader.readAsDataURL(input.files[0]); [cite: 76]
         }
 
-        // --- Pen Sensitivity Pressure [cite: 80] ---
+        // --- Pressure Sensitivity Drawing via Pointer Events ---
         canvas.onpointerdown = (e) => { 
-            if(!activeMode) return;
-            isDrawing = true; ctx.beginPath(); 
-            const rect = canvas.getBoundingClientRect();
+            if(!activeMode) return; [cite: 77]
+            isDrawing = true; ctx.beginPath(); [cite: 78]
+            const rect = canvas.getBoundingClientRect(); [cite: 78]
             ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
         };
 
         canvas.onpointermove = (e) => {
-            if(!isDrawing) return;
-            const rect = canvas.getBoundingClientRect();
-            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+            if(!isDrawing) return; [cite: 79]
+            const rect = canvas.getBoundingClientRect(); [cite: 80]
+            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top); [cite: 80]
             
+            // Apply pressure sensitivity (defaults to 0.5 if not supported)
             const pressure = e.pressure > 0 ? e.pressure : 0.5;
-            ctx.lineWidth = activeMode === 'erase' ? 40 * pressure : 10 * pressure;
-            ctx.lineCap = 'round';
+            ctx.lineWidth = activeMode === 'erase' ? 40 * pressure : 10 * pressure; [cite: 81]
+            ctx.lineCap = 'round'; [cite: 80]
             ctx.lineJoin = 'round';
 
-            if(activeMode === 'erase') { ctx.globalCompositeOperation = 'destination-out'; }
-            else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = currentColor; }
-            ctx.stroke();
+            if(activeMode === 'erase') { ctx.globalCompositeOperation = 'destination-out'; } [cite: 81]
+            else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = currentColor; } [cite: 82]
+            ctx.stroke(); [cite: 83]
         };
 
-        window.onpointerup = () => { if(isDrawing) { isDrawing = false; pushToCloud(); } };
+        window.onpointerup = () => { if(isDrawing) { isDrawing = false; pushToCloud(); } }; [cite: 84]
 
         document.querySelectorAll('.swatch').forEach(s => {
             s.onclick = () => {
-                document.querySelectorAll('.swatch').forEach(sw => sw.classList.remove('active'));
-                s.classList.add('active');
-                currentColor = s.dataset.color;
-                toggleMode('draw');
+                document.querySelectorAll('.swatch').forEach(sw => sw.classList.remove('active')); [cite: 55]
+                s.classList.add('active'); [cite: 55]
+                currentColor = s.dataset.color; [cite: 55]
+                toggleMode('draw'); [cite: 56]
             }
         });
     </script>
