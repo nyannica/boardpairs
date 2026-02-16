@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Studio Duo | Advanced Live</title>
+    <title>Studio Duo | Pro Zoom & Pan</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -18,19 +18,30 @@
         body, html {
             margin: 0; padding: 0; height: 100%; width: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-            background-color: var(--bg-base); background-size: cover; background-position: center;
-            color: var(--text-main); overflow: hidden; touch-action: none;
-            transition: background 0.3s ease;
+            background-color: var(--bg-base);
+            color: var(--text-main); overflow: auto; touch-action: none;
+        }
+
+        /* Viewport for Zooming */
+        #viewport {
+            width: 300vw; height: 300vh;
+            transform-origin: 0 0;
+            transition: transform 0.1s linear;
+            position: relative;
+            background-image: radial-gradient(var(--border) 1px, transparent 1px);
+            background-size: 40px 40px;
         }
 
         #gate { position: fixed; inset: 0; background: var(--bg-base); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9000; }
         .gate-input { background: transparent; border: none; border-bottom: 2px solid var(--border); color: var(--text-main); font-size: 20px; text-align: center; outline: none; padding: 10px; letter-spacing: 8px; width: 220px; margin-bottom: 20px; }
         .gate-btn { background: var(--accent); color: white; border: none; padding: 12px 32px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; border-radius: 4px; }
 
-        #drawing-canvas { position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; }
+        #drawing-canvas { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; }
         #drawing-canvas.active { pointer-events: all; cursor: crosshair; z-index: 5; }
+        #viewport.pan-active { cursor: grab; }
+        #viewport.pan-active:active { cursor: grabbing; }
 
-        #desktop { width: 100vw; height: 100vh; position: relative; display: none; z-index: 10; pointer-events: none; }
+        #desktop { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 10; pointer-events: none; }
         
         #taskbar {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
@@ -64,12 +75,10 @@
         .tool-btn.active { opacity: 1; border-bottom: 2px solid var(--accent); }
 
         #colorWheel { width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer; border-radius: 50%; overflow: hidden; }
-        
         .size-slider { width: 60px; height: 4px; cursor: pointer; accent-color: var(--accent); }
         .slider-label { font-size: 9px; font-weight: 700; opacity: 0.6; }
-
-        .toggle-wrap { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-        .toggle-wrap input { cursor: pointer; }
+        
+        #zoom-indicator { font-size: 10px; font-weight: 800; min-width: 35px; text-align: center; color: var(--accent); }
     </style>
 </head>
 <body>
@@ -79,76 +88,84 @@
         <button class="gate-btn" onclick="unlock()">Enter</button>
     </div>
 
-    <canvas id="drawing-canvas"></canvas>
+    <div id="viewport">
+        <canvas id="drawing-canvas"></canvas>
+        <div id="desktop"></div>
+    </div>
 
-    <div id="desktop">
-        <div id="taskbar">
-            <button class="tool-btn" onclick="addItem('text')">Text</button>
-            <button class="tool-btn" onclick="document.getElementById('fileUp').click()">Media</button>
-            
-            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 2px; align-items: center;">
-                <button class="tool-btn" onclick="document.getElementById('bgUp').click()">BG</button>
-                <button class="tool-btn" onclick="removeBackground()" style="font-size: 8px; color: #888;">RMV BG</button>
-            </div>
-            
-            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 10px; align-items: center;">
-                <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
-                <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
-                <input type="color" id="colorWheel" value="#111111" onchange="currentColor = this.value">
-                <span class="slider-label">SIZE</span>
-                <input type="range" class="size-slider" id="brushSize" min="1" max="50" value="3">
-                
-                <label class="toggle-wrap">
-                    <input type="checkbox" id="pressureToggle">
-                    <span style="font-size: 9px; font-weight: 700; opacity: 0.6;">PRESS</span>
-                </label>
-            </div>
-
-            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 5px;">
-                <button class="tool-btn" onclick="undo()">⟲</button>
-                <button class="tool-btn" onclick="redo()">⟳</button>
-            </div>
-
-            <button class="tool-btn" onclick="clearAll()" style="color:red; border-left: 1px solid var(--border); padding-left:10px;">Reset</button>
-            
-            <input type="file" id="fileUp" hidden onchange="uploadMedia(this)">
-            <input type="file" id="bgUp" hidden onchange="uploadBackground(this)">
+    <div id="taskbar">
+        <button class="tool-btn" onclick="addItem('text')">Text</button>
+        <button class="tool-btn" onclick="document.getElementById('fileUp').click()">Media</button>
+        
+        <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 5px; align-items: center;">
+            <button class="tool-btn" onclick="changeZoom(-0.25)">-</button>
+            <span id="zoom-indicator">100%</span>
+            <button class="tool-btn" onclick="changeZoom(0.25)">+</button>
+            <button class="tool-btn" onclick="toggleMode('pan')" id="panBtn">🖐</button>
         </div>
+        
+        <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 10px; align-items: center;">
+            <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
+            <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
+            <input type="color" id="colorWheel" value="#111111" onchange="currentColor = this.value">
+            <span class="slider-label">SIZE</span>
+            <input type="range" class="size-slider" id="brushSize" min="1" max="50" value="3">
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+                <input type="checkbox" id="pressureToggle">
+                <span style="font-size: 9px; font-weight: 700; opacity: 0.6;">PRESS</span>
+            </label>
+        </div>
+
+        <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 5px;">
+            <button class="tool-btn" onclick="undo()">⟲</button>
+            <button class="tool-btn" onclick="redo()">⟳</button>
+        </div>
+
+        <button class="tool-btn" onclick="clearAll()" style="color:red; border-left: 1px solid var(--border); padding-left:10px;">Reset</button>
+        
+        <input type="file" id="fileUp" hidden onchange="uploadMedia(this)">
+        <input type="file" id="bgUp" hidden onchange="uploadBackground(this)">
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://djpcwjjjjwbpsvuqmxxt.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI';
+        const SUPABASE_URL = 'https://YOUR_PROJECT_URL.supabase.co';
+        const SUPABASE_KEY = 'YOUR_ANON_KEY';
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let currentCode = "";
+        let currentScale = 1;
+        const viewport = document.getElementById('viewport');
         const canvas = document.getElementById('drawing-canvas');
         const ctx = canvas.getContext('2d');
         const sizeInput = document.getElementById('brushSize');
-        const pressureToggle = document.getElementById('pressureToggle');
         
-        let isDrawing = false;
+        let isDrawing = false, isPanning = false;
         let activeMode = null;
         let currentColor = "#111111";
         let lastX = 0, lastY = 0;
-        let history = [];
-        let redoStack = [];
+        let startX, startY, scrollLeft, scrollTop;
+        let history = [], redoStack = [];
 
         window.unlock = async function() {
             const input = document.getElementById('accessCode').value;
             if (input.length < 2) return;
             currentCode = `studio_${input}`;
             document.getElementById('gate').style.display = "none";
-            document.getElementById('desktop').style.display = "block";
             resizeCanvas();
             initialLoad();
             subscribeToChanges();
         };
 
+        window.changeZoom = function(delta) {
+            currentScale = Math.min(Math.max(0.25, currentScale + delta), 3);
+            viewport.style.transform = `scale(${currentScale})`;
+            document.getElementById('zoom-indicator').innerText = Math.round(currentScale * 100) + "%";
+        };
+
         function resizeCanvas() {
             const temp = canvas.toDataURL();
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.width = window.innerWidth * 3;
+            canvas.height = window.innerHeight * 3;
             const img = new Image();
             img.onload = () => ctx.drawImage(img, 0, 0);
             img.src = temp;
@@ -175,17 +192,12 @@
                     val: type === 'text' ? el.querySelector('textarea').value : el.querySelector('img, video').src
                 });
             });
-            await sb.from('studio_sessions').upsert({ 
-                id: currentCode, data: items, drawing: canvas.toDataURL(), background: document.body.style.backgroundImage 
-            });
+            await sb.from('studio_sessions').upsert({ id: currentCode, data: items, drawing: canvas.toDataURL(), background: document.body.style.backgroundImage });
         };
 
         async function initialLoad() {
             const { data } = await sb.from('studio_sessions').select('*').eq('id', currentCode).single();
-            if (data) { 
-                renderItems(data.data); renderDrawing(data.drawing); renderBackground(data.background);
-                history = [data.drawing || canvas.toDataURL()];
-            }
+            if (data) { renderItems(data.data); renderDrawing(data.drawing); renderBackground(data.background); history = [data.drawing]; }
         }
 
         function renderItems(items) {
@@ -201,79 +213,76 @@
             img.src = drawData;
         }
 
-        function renderBackground(bg) { document.body.style.backgroundImage = bg || ''; }
-        window.removeBackground = function() { document.body.style.backgroundImage = ''; pushUpdate(); };
+        function renderBackground(bg) { viewport.style.backgroundImage = bg ? `url(${bg})` : ''; }
+        window.removeBackground = function() { viewport.style.backgroundImage = ''; pushUpdate(); };
 
         window.toggleMode = function(mode) {
             activeMode = (activeMode === mode) ? null : mode;
-            canvas.classList.toggle('active', !!activeMode);
+            canvas.classList.toggle('active', activeMode === 'draw' || activeMode === 'erase');
+            viewport.classList.toggle('pan-active', activeMode === 'pan');
             document.getElementById('drawBtn').classList.toggle('active', activeMode === 'draw');
             document.getElementById('eraseBtn').classList.toggle('active', activeMode === 'erase');
+            document.getElementById('panBtn').classList.toggle('active', activeMode === 'pan');
         };
 
-        window.undo = function() {
-            if (history.length <= 1) return;
-            redoStack.push(history.pop());
-            renderDrawing(history[history.length - 1]);
-            pushUpdate();
-        };
+        // --- PANNING LOGIC ---
+        window.addEventListener('mousedown', (e) => {
+            if (activeMode !== 'pan') return;
+            isPanning = true;
+            startX = e.pageX - document.body.offsetLeft;
+            startY = e.pageY - document.body.offsetTop;
+            scrollLeft = document.body.scrollLeft;
+            scrollTop = document.body.scrollTop;
+        });
 
-        window.redo = function() {
-            if (redoStack.length === 0) return;
-            const state = redoStack.pop();
-            history.push(state);
-            renderDrawing(state);
-            pushUpdate();
-        };
+        window.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            e.preventDefault();
+            const x = e.pageX - document.body.offsetLeft;
+            const y = e.pageY - document.body.offsetTop;
+            const walkX = (x - startX);
+            const walkY = (y - startY);
+            document.body.scrollLeft = scrollLeft - walkX;
+            document.body.scrollTop = scrollTop - walkY;
+        });
 
-        // --- DRAWING WITH PRESSURE ---
+        window.addEventListener('mouseup', () => isPanning = false);
+
+        // --- DRAWING LOGIC ---
         canvas.onpointerdown = (e) => { 
-            isDrawing = true; [lastX, lastY] = [e.clientX, e.clientY]; 
+            if (activeMode !== 'draw' && activeMode !== 'erase') return;
+            isDrawing = true; 
+            lastX = e.offsetX;
+            lastY = e.offsetY;
         };
 
         canvas.onpointermove = (e) => {
             if (!isDrawing) return;
-            ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(e.clientX, e.clientY);
-            
+            const currX = e.offsetX;
+            const currY = e.offsetY;
+            ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(currX, currY);
             const baseSize = parseInt(sizeInput.value);
-            // Pressure is 0.5 for mouse, 0-1.0 for stylus. 
-            // If toggle is off, multiplier is always 1.
-            const pressure = pressureToggle.checked ? (e.pressure || 0.5) : 1;
-            
+            const pressure = document.getElementById('pressureToggle').checked ? (e.pressure || 0.5) : 1;
             ctx.lineWidth = (activeMode === 'erase' ? baseSize * 2 : baseSize) * pressure;
             ctx.lineCap = "round"; ctx.strokeStyle = currentColor;
             ctx.globalCompositeOperation = activeMode === 'erase' ? "destination-out" : "source-over";
-            ctx.stroke(); [lastX, lastY] = [e.clientX, e.clientY];
+            ctx.stroke(); 
+            [lastX, lastY] = [currX, currY];
         };
 
-        canvas.onpointerup = () => { 
-            if (!isDrawing) return;
-            isDrawing = false; 
-            history.push(canvas.toDataURL());
-            if (history.length > 30) history.shift();
-            redoStack = []; pushUpdate(); 
-        };
+        canvas.onpointerup = () => { if (!isDrawing) return; isDrawing = false; history.push(canvas.toDataURL()); pushUpdate(); };
 
         window.addItem = function(type, val = '', x = 100, y = 100, w = 300, h = 200, shouldPush = true) {
             const div = document.createElement('div');
-            div.className = 'item';
-            div.style.left = x + 'px'; div.style.top = y + 'px';
-            div.style.width = w + 'px'; div.style.height = h + 'px';
+            div.className = 'item'; div.style.left = x + 'px'; div.style.top = y + 'px'; div.style.width = w + 'px'; div.style.height = h + 'px';
             const handle = document.createElement('div'); handle.className = 'drag-handle';
             const close = document.createElement('button'); close.className = 'close-btn';
             close.onclick = () => { div.remove(); pushUpdate(); };
             const contentWrap = document.createElement('div'); contentWrap.className = 'content-wrap';
-            let content;
-            if (type === 'text') {
-                content = document.createElement('textarea'); content.value = val;
-                content.onblur = pushUpdate;
-            } else {
-                content = document.createElement(type === 'video' ? 'video' : 'img');
-                content.src = val; if(type === 'video') content.controls = true;
-            }
+            let content = type === 'text' ? document.createElement('textarea') : document.createElement(type === 'video' ? 'video' : 'img');
+            if (type === 'text') { content.value = val; content.onblur = pushUpdate; } else { content.src = val; if(type === 'video') content.controls = true; }
             const resizer = document.createElement('div'); resizer.className = 'resizer';
-            contentWrap.appendChild(content); div.appendChild(handle); div.appendChild(close);
-            div.appendChild(contentWrap); div.appendChild(resizer);
+            contentWrap.appendChild(content); div.appendChild(handle); div.appendChild(close); div.appendChild(contentWrap); div.appendChild(resizer);
             document.getElementById('desktop').appendChild(div);
             setupInteraction(div, handle, resizer);
             if(shouldPush) pushUpdate();
@@ -281,17 +290,18 @@
 
         function setupInteraction(item, handle, resizer) {
             handle.onpointerdown = (e) => {
-                if(activeMode) toggleMode(activeMode);
-                let startX = e.clientX - item.offsetLeft, startY = e.clientY - item.offsetTop;
-                document.onpointermove = (m) => { item.style.left = (m.clientX - startX) + 'px'; item.style.top = (m.clientY - startY) + 'px'; };
+                let startX = e.clientX - item.offsetLeft * currentScale, startY = e.clientY - item.offsetTop * currentScale;
+                document.onpointermove = (m) => { 
+                    item.style.left = ((m.clientX - startX) / currentScale) + 'px'; 
+                    item.style.top = ((m.clientY - startY) / currentScale) + 'px'; 
+                };
                 document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
             };
             resizer.onpointerdown = (e) => {
-                e.preventDefault(); e.stopPropagation();
                 let startW = item.offsetWidth, startH = item.offsetHeight, startX = e.clientX, startY = e.clientY;
                 document.onpointermove = (m) => {
-                    item.style.width = Math.max(100, (startW + (m.clientX - startX))) + 'px';
-                    item.style.height = Math.max(80, (startH + (m.clientY - startY))) + 'px';
+                    item.style.width = Math.max(100, (startW + (m.clientX - startX) / currentScale)) + 'px';
+                    item.style.height = Math.max(80, (startH + (m.clientY - startY) / currentScale)) + 'px';
                 };
                 document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
             };
@@ -307,17 +317,13 @@
         window.uploadBackground = function(input) {
             const file = input.files[0]; if (!file) return;
             const reader = new FileReader();
-            reader.onload = (e) => { document.body.style.backgroundImage = `url('${e.target.result}')`; pushUpdate(); };
+            reader.onload = (e) => { viewport.style.backgroundImage = `url('${e.target.result}')`; pushUpdate(); };
             reader.readAsDataURL(file);
         };
 
-        window.clearAll = async function() { 
-            if(confirm("Erase Everything?")) { 
-                await sb.from('studio_sessions').delete().eq('id', currentCode);
-                location.reload();
-            } 
-        };
-        window.onresize = resizeCanvas;
+        window.clearAll = async function() { if(confirm("Erase Everything?")) { await sb.from('studio_sessions').delete().eq('id', currentCode); location.reload(); } };
+        window.undo = function() { if (history.length <= 1) return; redoStack.push(history.pop()); renderDrawing(history[history.length - 1]); pushUpdate(); };
+        window.redo = function() { if (redoStack.length === 0) return; const state = redoStack.pop(); history.push(state); renderDrawing(state); pushUpdate(); };
     </script>
 </body>
 </html>
