@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Studio Duo | Live Global</title>
+    <title>Studio Duo | Live Collaborative</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -40,6 +40,7 @@
             pointer-events: all;
         }
 
+        /* Improved Item System */
         .item { 
             position: absolute; min-width: 150px; min-height: 100px; 
             z-index: 100; pointer-events: all; display: flex; flex-direction: column;
@@ -47,16 +48,22 @@
             border: 1px solid var(--border); overflow: hidden;
         }
 
-        .drag-handle { height: 24px; width: 100%; background: rgba(0,0,0,0.03); cursor: move; display: flex; align-items: center; justify-content: center; }
-        .drag-handle::after { content: '•••'; color: #ccc; font-size: 10px; }
+        .drag-handle { height: 28px; width: 100%; background: rgba(0,0,0,0.04); cursor: move; display: flex; align-items: center; justify-content: center; }
+        .drag-handle::after { content: '••••'; color: #999; font-size: 12px; letter-spacing: 2px; }
 
-        .resizer { width: 15px; height: 15px; background: transparent; position: absolute; right: 0; bottom: 0; cursor: nwse-resize; z-index: 110; }
+        .resizer { 
+            width: 16px; height: 16px; 
+            background: transparent; 
+            position: absolute; right: 0; bottom: 0; 
+            cursor: nwse-resize; z-index: 110; 
+        }
+        .resizer::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 4px; height: 4px; border-right: 2px solid #ccc; border-bottom: 2px solid #ccc; }
 
-        .content-wrap { flex-grow: 1; position: relative; width: 100%; height: 100%; overflow: hidden; }
-        .item textarea { width: 100%; height: 100%; border: none; resize: none; outline: none; background: transparent; padding: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; }
-        .item img, .item video { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+        .content-wrap { flex-grow: 1; position: relative; width: 100%; height: 100%; overflow: hidden; display: flex;}
+        .item textarea { width: 100%; height: 100%; border: none; resize: none; outline: none; background: transparent; padding: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; flex-grow: 1;}
+        .item img, .item video { width: 100%; height: 100%; object-fit: contain; pointer-events: none; flex-grow: 1;}
 
-        .close-btn { position: absolute; top: 5px; right: 5px; border: none; background: #ff5f56; width: 12px; height: 12px; border-radius: 50%; cursor: pointer; z-index: 120; font-size: 0; }
+        .close-btn { position: absolute; top: 6px; right: 8px; border: none; background: #ff5f56; width: 12px; height: 12px; border-radius: 50%; cursor: pointer; z-index: 120; font-size: 0; }
         
         .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 8px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
         .tool-btn.active { opacity: 1; border-bottom: 2px solid var(--accent); }
@@ -78,7 +85,7 @@
             <button class="tool-btn" onclick="document.getElementById('fileUp').click()">Media</button>
             <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
             <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
-            <div style="display:flex; gap:5px; padding: 0 10px; border-left: 1px solid var(--border)">
+            <div style="display:flex; gap:8px; padding: 0 10px; border-left: 1px solid var(--border)">
                 <div class="swatch" style="background:#111" onclick="setColor('#111')"></div>
                 <div class="swatch" style="background:#e63946" onclick="setColor('#e63946')"></div>
                 <div class="swatch" style="background:#457b9d" onclick="setColor('#457b9d')"></div>
@@ -89,172 +96,186 @@
     </div>
 
     <script>
-        // Use window.onload to ensure all libraries are loaded before script execution
-        window.onload = function() {
-            const SUPABASE_URL = 'https://djpcwjjjjwbpsvuqmxxt.supabase.co';
-            const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI';
-            
-            // Check if Supabase library loaded correctly
-            if (typeof supabase === 'undefined') {
-                console.error("Supabase library failed to load.");
-                return;
-            }
-            
-            const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // CONFIGURATION
+        const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL';
+        const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        
+        // Use 'sb' to avoid conflict with the library's global 'supabase' object
+        const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-            let currentCode = "";
-            const canvas = document.getElementById('drawing-canvas');
-            const ctx = canvas.getContext('2d');
-            let isDrawing = false;
-            let activeMode = null;
-            let currentColor = "#111111";
-            let lastX = 0, lastY = 0;
+        let currentCode = "";
+        const canvas = document.getElementById('drawing-canvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let activeMode = null;
+        let currentColor = "#111111";
+        let lastX = 0, lastY = 0;
 
-            // Define unlock on the window object so the HTML button can always find it
-            window.unlock = async function() {
-                const input = document.getElementById('accessCode').value;
-                if (input.length < 2) return;
-                currentCode = `studio_${input}`;
-                document.getElementById('gate').style.display = "none";
-                document.getElementById('desktop').style.display = "block";
-                
-                resizeCanvas();
-                initialLoad();
-                subscribeToChanges();
-            };
-
-            function resizeCanvas() {
-                const temp = canvas.toDataURL();
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-                const img = new Image();
-                img.onload = () => ctx.drawImage(img, 0, 0);
-                img.src = temp;
-            }
-
-            function subscribeToChanges() {
-                client.channel('studio_realtime')
-                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_sessions', filter: `id=eq.${currentCode}` }, 
-                    payload => {
-                        renderItems(payload.new.data);
-                        renderDrawing(payload.new.drawing);
-                    }).subscribe();
-            }
-
-            window.pushUpdate = async function() {
-                const items = [];
-                document.querySelectorAll('.item').forEach(el => {
-                    const type = el.querySelector('img') ? 'image' : el.querySelector('video') ? 'video' : 'text';
-                    items.push({
-                        type, x: parseInt(el.style.left), y: parseInt(el.style.top),
-                        w: parseInt(el.style.width), h: parseInt(el.style.height),
-                        val: type === 'text' ? el.querySelector('textarea').value : el.querySelector('img, video').src
-                    });
-                });
-                await client.from('studio_sessions').upsert({ id: currentCode, data: items, drawing: canvas.toDataURL() });
-            };
-
-            async function initialLoad() {
-                const { data, error } = await client.from('studio_sessions').select('*').eq('id', currentCode).single();
-                if (data) { renderItems(data.data); renderDrawing(data.drawing); }
-            }
-
-            function renderItems(items) {
-                if (!items) return;
-                document.querySelectorAll('.item').forEach(el => el.remove());
-                items.forEach(i => addItem(i.type, i.val, i.x, i.y, i.w, i.h, false));
-            }
-
-            function renderDrawing(drawData) {
-                if (!drawData) return;
-                const img = new Image();
-                img.onload = () => { ctx.clearRect(0,0,canvas.width, canvas.height); ctx.drawImage(img, 0, 0); };
-                img.src = drawData;
-            }
-
-            window.toggleMode = function(mode) {
-                activeMode = (activeMode === mode) ? null : mode;
-                canvas.classList.toggle('active', !!activeMode);
-                document.getElementById('drawBtn').classList.toggle('active', activeMode === 'draw');
-                document.getElementById('eraseBtn').classList.toggle('active', activeMode === 'erase');
-            };
-
-            window.setColor = function(c) { 
-                currentColor = c; 
-                if(activeMode !== 'draw') toggleMode('draw'); 
-            };
-
-            canvas.onpointerdown = (e) => { isDrawing = true; [lastX, lastY] = [e.clientX, e.clientY]; };
-            canvas.onpointermove = (e) => {
-                if (!isDrawing) return;
-                ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(e.clientX, e.clientY);
-                ctx.lineWidth = activeMode === 'erase' ? 40 : 3;
-                ctx.lineCap = "round"; ctx.strokeStyle = currentColor;
-                ctx.globalCompositeOperation = activeMode === 'erase' ? "destination-out" : "source-over";
-                ctx.stroke(); [lastX, lastY] = [e.clientX, e.clientY];
-            };
-            canvas.onpointerup = () => { isDrawing = false; pushUpdate(); };
-
-            window.addItem = function(type, val = '', x = 100, y = 100, w = 300, h = 200, shouldPush = true) {
-                const div = document.createElement('div');
-                div.className = 'item';
-                div.style.left = x + 'px'; div.style.top = y + 'px';
-                div.style.width = w + 'px'; div.style.height = h + 'px';
-
-                const handle = document.createElement('div'); handle.className = 'drag-handle';
-                const close = document.createElement('button'); close.className = 'close-btn';
-                close.onclick = () => { div.remove(); pushUpdate(); };
-
-                const contentWrap = document.createElement('div'); contentWrap.className = 'content-wrap';
-                let content;
-                if (type === 'text') {
-                    content = document.createElement('textarea'); content.value = val;
-                    content.onblur = pushUpdate;
-                } else {
-                    content = document.createElement(type === 'video' ? 'video' : 'img');
-                    content.src = val; if(type === 'video') content.controls = true;
-                }
-
-                const resizer = document.createElement('div'); resizer.className = 'resizer';
-                contentWrap.appendChild(content); div.appendChild(handle); div.appendChild(close);
-                div.appendChild(contentWrap); div.appendChild(resizer);
-                document.getElementById('desktop').appendChild(div);
-
-                setupInteraction(div, handle, resizer);
-                if(shouldPush) pushUpdate();
-            };
-
-            function setupInteraction(item, handle, resizer) {
-                handle.onpointerdown = (e) => {
-                    if(activeMode) toggleMode(activeMode);
-                    let startX = e.clientX - item.offsetLeft, startY = e.clientY - item.offsetTop;
-                    document.onpointermove = (m) => { item.style.left = (m.clientX - startX) + 'px'; item.style.top = (m.clientY - startY) + 'px'; };
-                    document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
-                };
-                resizer.onpointerdown = (e) => {
-                    e.stopPropagation();
-                    let startW = item.offsetWidth, startH = item.offsetHeight, startX = e.clientX, startY = e.clientY;
-                    document.onpointermove = (m) => { item.style.width = (startW + (m.clientX - startX)) + 'px'; item.style.height = (startH + (m.clientY - startY)) + 'px'; };
-                    document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
-                };
-            }
-
-            window.uploadMedia = function(input) {
-                const file = input.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (e) => addItem(file.type.startsWith('image') ? 'image' : 'video', e.target.result);
-                reader.readAsDataURL(file);
-            };
-
-            window.clearAll = async function() { 
-                if(confirm("Erase Everything?")) { 
-                    await client.from('studio_sessions').delete().eq('id', currentCode);
-                    location.reload();
-                } 
-            };
-            window.onresize = resizeCanvas;
+        // --- GLOBAL FUNCTIONS ---
+        window.unlock = async function() {
+            const input = document.getElementById('accessCode').value;
+            if (input.length < 2) return;
+            currentCode = `studio_${input}`;
+            document.getElementById('gate').style.display = "none";
+            document.getElementById('desktop').style.display = "block";
+            resizeCanvas();
+            initialLoad();
+            subscribeToChanges();
         };
+
+        function resizeCanvas() {
+            const temp = canvas.toDataURL();
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            const img = new Image();
+            img.onload = () => ctx.drawImage(img, 0, 0);
+            img.src = temp;
+        }
+
+        function subscribeToChanges() {
+            sb.channel('studio_realtime')
+                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_sessions', filter: `id=eq.${currentCode}` }, 
+                payload => {
+                    renderItems(payload.new.data);
+                    renderDrawing(payload.new.drawing);
+                }).subscribe();
+        }
+
+        window.pushUpdate = async function() {
+            if (!currentCode) return;
+            const items = [];
+            document.querySelectorAll('.item').forEach(el => {
+                const type = el.querySelector('img') ? 'image' : el.querySelector('video') ? 'video' : 'text';
+                items.push({
+                    type, 
+                    x: parseInt(el.style.left), y: parseInt(el.style.top),
+                    w: parseInt(el.style.width), h: parseInt(el.style.height),
+                    val: type === 'text' ? el.querySelector('textarea').value : el.querySelector('img, video').src
+                });
+            });
+            await sb.from('studio_sessions').upsert({ id: currentCode, data: items, drawing: canvas.toDataURL() });
+        };
+
+        async function initialLoad() {
+            const { data } = await sb.from('studio_sessions').select('*').eq('id', currentCode).single();
+            if (data) { renderItems(data.data); renderDrawing(data.drawing); }
+        }
+
+        function renderItems(items) {
+            if (!items) return;
+            document.querySelectorAll('.item').forEach(el => el.remove());
+            items.forEach(i => addItem(i.type, i.val, i.x, i.y, i.w, i.h, false));
+        }
+
+        function renderDrawing(drawData) {
+            if (!drawData) return;
+            const img = new Image();
+            img.onload = () => { ctx.clearRect(0,0,canvas.width, canvas.height); ctx.drawImage(img, 0, 0); };
+            img.src = drawData;
+        }
+
+        window.toggleMode = function(mode) {
+            activeMode = (activeMode === mode) ? null : mode;
+            canvas.classList.toggle('active', !!activeMode);
+            document.getElementById('drawBtn').classList.toggle('active', activeMode === 'draw');
+            document.getElementById('eraseBtn').classList.toggle('active', activeMode === 'erase');
+        };
+
+        window.setColor = function(c) { currentColor = c; if(activeMode !== 'draw') toggleMode('draw'); };
+
+        // --- INTERACTION LOGIC ---
+        canvas.onpointerdown = (e) => { isDrawing = true; [lastX, lastY] = [e.clientX, e.clientY]; };
+        canvas.onpointermove = (e) => {
+            if (!isDrawing) return;
+            ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(e.clientX, e.clientY);
+            ctx.lineWidth = activeMode === 'erase' ? 40 : 3;
+            ctx.lineCap = "round"; ctx.strokeStyle = currentColor;
+            ctx.globalCompositeOperation = activeMode === 'erase' ? "destination-out" : "source-over";
+            ctx.stroke(); [lastX, lastY] = [e.clientX, e.clientY];
+        };
+        canvas.onpointerup = () => { isDrawing = false; pushUpdate(); };
+
+        window.addItem = function(type, val = '', x = 100, y = 100, w = 300, h = 200, shouldPush = true) {
+            const div = document.createElement('div');
+            div.className = 'item';
+            div.style.left = x + 'px'; div.style.top = y + 'px';
+            div.style.width = w + 'px'; div.style.height = h + 'px';
+
+            const handle = document.createElement('div'); handle.className = 'drag-handle';
+            const close = document.createElement('button'); close.className = 'close-btn';
+            close.onclick = () => { div.remove(); pushUpdate(); };
+
+            const contentWrap = document.createElement('div'); contentWrap.className = 'content-wrap';
+            let content;
+            if (type === 'text') {
+                content = document.createElement('textarea'); content.value = val;
+                content.onblur = pushUpdate;
+            } else {
+                content = document.createElement(type === 'video' ? 'video' : 'img');
+                content.src = val; if(type === 'video') content.controls = true;
+            }
+
+            const resizer = document.createElement('div'); resizer.className = 'resizer';
+            contentWrap.appendChild(content); div.appendChild(handle); div.appendChild(close);
+            div.appendChild(contentWrap); div.appendChild(resizer);
+            document.getElementById('desktop').appendChild(div);
+
+            setupInteraction(div, handle, resizer);
+            if(shouldPush) pushUpdate();
+        };
+
+        function setupInteraction(item, handle, resizer) {
+            // Dragging Logic
+            handle.onpointerdown = (e) => {
+                if(activeMode) toggleMode(activeMode); // Disable drawing when moving
+                let startX = e.clientX - item.offsetLeft;
+                let startY = e.clientY - item.offsetTop;
+                
+                document.onpointermove = (m) => {
+                    item.style.left = (m.clientX - startX) + 'px';
+                    item.style.top = (m.clientY - startY) + 'px';
+                };
+                document.onpointerup = () => { 
+                    document.onpointermove = null; 
+                    pushUpdate(); 
+                };
+            };
+
+            // Resizing Logic
+            resizer.onpointerdown = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                let startW = item.offsetWidth;
+                let startH = item.offsetHeight;
+                let startX = e.clientX;
+                let startY = e.clientY;
+
+                document.onpointermove = (m) => {
+                    item.style.width = Math.max(100, (startW + (m.clientX - startX))) + 'px';
+                    item.style.height = Math.max(80, (startH + (m.clientY - startY))) + 'px';
+                };
+                document.onpointerup = () => { 
+                    document.onpointermove = null; 
+                    pushUpdate(); 
+                };
+            };
+        }
+
+        window.uploadMedia = function(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => addItem(file.type.startsWith('image') ? 'image' : 'video', e.target.result);
+            reader.readAsDataURL(file);
+        };
+
+        window.clearAll = async function() { 
+            if(confirm("Erase Everything?")) { 
+                await sb.from('studio_sessions').delete().eq('id', currentCode);
+                location.reload();
+            } 
+        };
+
+        window.onresize = resizeCanvas;
     </script>
 </body>
 </html>
