@@ -3,68 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Studio Duo | Gallery</title>
+    <title>Studio Duo | Real-Time</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        :root {
-            --bg-base: #fcfcfc;
-            --surface: rgba(255, 255, 255, 0.85);
-            --accent: #111111;
-            --text-main: #222222;
-            --border: rgba(0, 0, 0, 0.08);
-            --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-        }
-
-        body, html {
-            margin: 0; padding: 0; height: 100%; width: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-            background-color: var(--bg-base); background-size: cover; background-position: center;
-            color: var(--text-main); overflow: hidden; touch-action: none;
-        }
-
+        :root { --bg-base: #fcfcfc; --surface: rgba(255, 255, 255, 0.85); --accent: #111111; --text-main: #222222; --border: rgba(0, 0, 0, 0.08); --shadow: 0 4px 20px rgba(0, 0, 0, 0.05); }
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; background-color: var(--bg-base); background-size: cover; background-position: center; color: var(--text-main); overflow: hidden; touch-action: none; }
         #gate { position: fixed; inset: 0; background: var(--bg-base); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 6000; }
-        .gate-content { display: flex; flex-direction: column; align-items: center; gap: 24px; }
-        .gate-input { background: transparent; border: none; border-bottom: 2px solid var(--border); color: var(--text-main); font-size: 20px; text-align: center; outline: none; padding: 10px; letter-spacing: 8px; width: 220px; }
+        .gate-input { background: transparent; border: none; border-bottom: 2px solid var(--border); color: var(--text-main); font-size: 20px; text-align: center; outline: none; padding: 10px; letter-spacing: 8px; width: 220px; margin-bottom: 20px; }
         .gate-btn { background: var(--accent); color: white; border: none; padding: 12px 32px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; border-radius: 4px; }
-
         #drawing-canvas { position: absolute; top: 0; left: 0; z-index: 1; pointer-events: none; }
         #drawing-canvas.active { z-index: 2500; pointer-events: all; cursor: crosshair; }
-
         #desktop { width: 100vw; height: 100vh; position: relative; display: none; z-index: 2; }
-
-        #taskbar {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: var(--surface); backdrop-filter: blur(20px);
-            padding: 10px 20px; border-radius: 12px;
-            display: flex; gap: 15px; align-items: center;
-            border: 1px solid var(--border); z-index: 4000; box-shadow: var(--shadow);
-        }
-
-        /* Items */
+        #taskbar { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--surface); backdrop-filter: blur(20px); padding: 10px 20px; border-radius: 12px; display: flex; gap: 15px; align-items: center; border: 1px solid var(--border); z-index: 4000; box-shadow: var(--shadow); }
         .item { position: absolute; min-width: 50px; min-height: 50px; z-index: 10; cursor: grab; }
         .item-box { background: var(--surface); backdrop-filter: blur(15px); padding: 32px 14px 14px; border-radius: 8px; border: 1px solid var(--border); box-shadow: var(--shadow); resize: both; overflow: hidden; }
-        .item-transparent { padding: 10px; cursor: grab; background: transparent; } /* No box for PNGs */
-
+        .item-transparent { padding: 10px; cursor: grab; background: transparent; }
         .item textarea { width: 100%; height: 140px; border: none; resize: none; outline: none; background: transparent; color: var(--text-main); font-size: 14px; line-height: 1.6; font-family: inherit; }
         .item img, .item video { max-width: 100%; display: block; pointer-events: none; border-radius: 4px; }
-        
-        /* Tools */
         .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 4px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
         .tool-btn.active { opacity: 1; border-bottom: 2px solid var(--accent); }
         .close-btn { position: absolute; top: 8px; right: 10px; border: none; background: none; cursor: pointer; color: #aaa; font-size: 10px; }
-
         .palette { display: flex; gap: 6px; border-left: 1px solid var(--border); padding-left: 15px; }
-        .swatch { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .swatch { width: 16px; height: 16px; border-radius: 50%; cursor: pointer; border: 1px solid rgba(0,0,0,0.1); }
         .swatch.active { transform: scale(1.3); border: 1px solid var(--accent); }
-
-        .slider-box { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #888; border-left: 1px solid var(--border); padding-left: 15px; }
-        input[type="range"] { accent-color: var(--accent); cursor: pointer; width: 60px; }
+        #sync-indicator { font-size: 9px; color: #2a9d8f; font-weight: bold; margin-left: 10px; opacity: 0; transition: opacity 0.3s; }
     </style>
 </head>
 <body>
 
     <div id="gate">
         <div class="gate-content">
-            <input type="password" id="accessCode" class="gate-input" placeholder="PASSKEY" onkeypress="if(event.key === 'Enter') unlock()">
+            <input type="password" id="accessCode" class="gate-input" placeholder="PASSKEY">
             <button class="gate-btn" onclick="unlock()">Enter</button>
         </div>
     </div>
@@ -79,7 +48,7 @@
             <button id="drawBtn" class="tool-btn" onclick="toggleMode('draw')">Draw</button>
             <button id="eraseBtn" class="tool-btn" onclick="toggleMode('erase')">Erase</button>
             
-            <div class="palette" id="palette">
+            <div class="palette">
                 <div class="swatch active" style="background: #111111" data-color="#111111"></div>
                 <div class="swatch" style="background: #e63946" data-color="#e63946"></div>
                 <div class="swatch" style="background: #457b9d" data-color="#457b9d"></div>
@@ -87,114 +56,99 @@
                 <div class="swatch" style="background: #e9c46a" data-color="#e9c46a"></div>
             </div>
 
-            <div class="slider-box">
-                <input type="range" id="brushSize" min="1" max="50" value="3">
-            </div>
-
             <input type="file" id="fileUp" hidden accept="image/*,video/*" onchange="uploadMedia(this)">
             <input type="file" id="bgUp" hidden accept="image/*" onchange="uploadBackground(this)">
-            <button class="tool-btn" onclick="clearAll()" style="color:#d9534f; opacity:1">Reset</button>
+            <span id="sync-indicator">LIVE</span>
         </div>
     </div>
 
     <script>
-        let currentCode = "";
+        // --- CONFIG ---
+        const SB_URL = "https://djpcwjjjjwbpsvuqmxxt.supabase.co"; 
+        const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI";
+        const supabase = window.supabase.createClient(SB_URL, SB_KEY);
+
+        let currentRoom = "";
         const canvas = document.getElementById('drawing-canvas');
         const ctx = canvas.getContext('2d');
-        let isDrawing = false;
-        let activeMode = null;
-        let currentColor = "#111111";
+        let isDrawing = false, activeMode = null, currentColor = "#111111";
 
-        function unlock() {
+        async function unlock() {
             const input = document.getElementById('accessCode').value;
             if (input.length < 2) return;
-            currentCode = `studio_gal_v2_${input}`;
+            currentRoom = input;
             document.getElementById('gate').style.display = "none";
             document.getElementById('desktop').style.display = "block";
             resizeCanvas();
-            loadAll();
+            
+            // Listen for Realtime updates
+            supabase.channel('any')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_duo', filter: `id=eq.${currentRoom}` }, 
+                payload => { renderFromData(payload.new.data); })
+            .subscribe();
+
+            // Initial Load
+            const { data } = await supabase.from('studio_duo').select('data').eq('id', currentRoom).single();
+            if (data) renderFromData(data.data);
+            else await supabase.from('studio_duo').insert([{ id: currentRoom, data: { items: [], draw: "", bg: "" } }]);
         }
 
         function resizeCanvas() {
-            const temp = canvas.toDataURL();
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            const img = new Image();
-            img.onload = () => ctx.drawImage(img, 0, 0);
-            img.src = temp;
         }
 
-        // Palette Logic
+        // --- CORE SYNC LOGIC ---
+        let syncTimeout;
+        async function pushToCloud() {
+            document.getElementById('sync-indicator').style.opacity = 1;
+            const items = [];
+            document.querySelectorAll('.item').forEach(el => {
+                const c = el.querySelector('.content');
+                items.push({ type: el.dataset.type, val: el.dataset.type === 'text' ? c.value : c.src, x: el.style.left, y: el.style.top, w: el.style.width, h: el.style.height, trans: el.dataset.trans === "true" });
+            });
+
+            const state = { items, draw: canvas.toDataURL(), bg: document.body.style.backgroundImage };
+            await supabase.from('studio_duo').update({ data: state }).eq('id', currentRoom);
+            
+            clearTimeout(syncTimeout);
+            syncTimeout = setTimeout(() => { document.getElementById('sync-indicator').style.opacity = 0; }, 1000);
+        }
+
+        function renderFromData(data) {
+            if (!data) return;
+            // Only update if we aren't currently dragging or drawing to prevent flicker
+            if (isDrawing) return; 
+            
+            document.getElementById('desktop').querySelectorAll('.item').forEach(i => i.remove());
+            data.items.forEach(d => addItem(d.type, d.val, d.x, d.y, d.w, d.h, d.trans, true));
+            
+            if (data.draw) {
+                const img = new Image();
+                img.onload = () => { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(img, 0, 0); };
+                img.src = data.draw;
+            }
+            if (data.bg) document.body.style.backgroundImage = data.bg;
+        }
+
+        // --- UI & TOOLS ---
         document.querySelectorAll('.swatch').forEach(s => {
             s.onclick = () => {
                 document.querySelectorAll('.swatch').forEach(sw => sw.classList.remove('active'));
                 s.classList.add('active');
                 currentColor = s.dataset.color;
-                if(activeMode !== 'draw') toggleMode('draw');
+                toggleMode('draw');
             }
         });
 
         function toggleMode(mode) {
-            if (activeMode === mode) { activeMode = null; canvas.classList.remove('active'); } 
-            else { activeMode = mode; canvas.classList.add('active'); }
+            activeMode = (activeMode === mode) ? null : mode;
+            canvas.classList.toggle('active', !!activeMode);
             document.getElementById('drawBtn').classList.toggle('active', activeMode === 'draw');
             document.getElementById('eraseBtn').classList.toggle('active', activeMode === 'erase');
         }
 
-        function getPos(e) {
-            const rect = canvas.getBoundingClientRect();
-            let x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-            let y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-            return { x, y };
-        }
-
-        function startDrawing(e) {
-            if (!activeMode) return;
-            isDrawing = true;
-            const pos = getPos(e);
-            ctx.beginPath();
-            ctx.moveTo(pos.x, pos.y);
-        }
-
-        function draw(e) {
-            if (!isDrawing || !activeMode) return;
-            e.preventDefault();
-            const pos = getPos(e);
-            const size = document.getElementById('brushSize').value;
-            ctx.lineTo(pos.x, pos.y);
-            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-            if (activeMode === 'erase') {
-                ctx.globalCompositeOperation = 'destination-out';
-                ctx.lineWidth = size * 5;
-            } else {
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.strokeStyle = currentColor;
-                ctx.lineWidth = size;
-            }
-            ctx.stroke();
-        }
-
-        function stopDrawing() { if (isDrawing) { isDrawing = false; saveDrawing(); } }
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        window.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('touchstart', startDrawing, {passive: false});
-        canvas.addEventListener('touchmove', draw, {passive: false});
-        canvas.addEventListener('touchend', stopDrawing);
-
-        function uploadBackground(input) {
-            const file = input.files[0];
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                document.body.style.backgroundImage = `url('${e.target.result}')`;
-                localStorage.setItem(currentCode + "_bg", e.target.result);
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function saveDrawing() { localStorage.setItem(currentCode + "_draw", canvas.toDataURL()); }
-
-        function addItem(type, val = '', x = '100px', y = '120px', w = 'auto', h = 'auto', isTransparent = false) {
+        function addItem(type, val = '', x = '100px', y = '120px', w = 'auto', h = 'auto', isTransparent = false, isLoading = false) {
             const div = document.createElement('div');
             div.className = `item ${isTransparent ? 'item-transparent' : 'item-box'}`;
             div.dataset.type = type; div.dataset.trans = isTransparent;
@@ -203,66 +157,66 @@
 
             const close = document.createElement('button');
             close.innerHTML = '×'; close.className = 'close-btn';
-            close.onclick = () => { div.remove(); saveData(); };
+            close.onclick = () => { div.remove(); pushToCloud(); };
             div.appendChild(close);
 
-            const content = document.createElement(type === 'text' ? 'textarea' : (type === 'image' ? 'img' : (type === 'video' ? 'video' : 'div')));
+            const content = document.createElement(type === 'text' ? 'textarea' : (type === 'image' ? 'img' : 'video'));
             content.className = 'content';
-            content.src = val;
-            if (type === 'text') { content.value = val; content.oninput = saveData; }
+            if (type === 'text') { content.value = val; content.onblur = pushToCloud; } else { content.src = val; }
             if (type === 'video') content.controls = true;
             div.appendChild(content);
 
             makeDraggable(div);
             document.getElementById('desktop').appendChild(div);
-            saveData();
+            if (!isLoading) pushToCloud();
         }
 
         function makeDraggable(el) {
             let p1 = 0, p2 = 0, p3 = 0, p4 = 0;
             el.onmousedown = el.ontouchstart = (e) => {
-                if (['TEXTAREA', 'BUTTON', 'VIDEO', 'INPUT'].includes(e.target.tagName)) return;
-                const pos = getPos(e); p3 = pos.x; p4 = pos.y;
+                if (['TEXTAREA', 'BUTTON', 'VIDEO'].includes(e.target.tagName)) return;
+                p3 = (e.touches ? e.touches[0].clientX : e.clientX);
+                p4 = (e.touches ? e.touches[0].clientY : e.clientY);
                 document.onmousemove = document.ontouchmove = (e) => {
-                    const movePos = getPos(e);
-                    p1 = p3 - movePos.x; p2 = p4 - movePos.y;
-                    p3 = movePos.x; p4 = movePos.y;
+                    const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+                    const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+                    p1 = p3 - cx; p2 = p4 - cy; p3 = cx; p4 = cy;
                     el.style.top = (el.offsetTop - p2) + "px"; el.style.left = (el.offsetLeft - p1) + "px";
                 };
-                document.onmouseup = document.ontouchend = () => { document.onmousemove = document.ontouchmove = null; saveData(); };
+                document.onmouseup = document.ontouchend = () => { document.onmousemove = document.ontouchmove = null; pushToCloud(); };
             };
         }
 
         function uploadMedia(input) {
             const file = input.files[0];
             const reader = new FileReader();
-            reader.onload = (e) => {
-                const isPNG = file.type === "image/png";
-                addItem(file.type.startsWith('image') ? 'image' : 'video', e.target.result, '100px', '100px', '300px', '200px', isPNG);
-            };
+            reader.onload = (e) => addItem(file.type.startsWith('image') ? 'image' : 'video', e.target.result, '100px', '100px', '300px', '200px', file.type === "image/png");
             reader.readAsDataURL(file);
         }
 
-        function saveData() {
-            const items = [];
-            document.querySelectorAll('.item').forEach(el => {
-                const c = el.querySelector('.content');
-                items.push({ type: el.dataset.type, val: el.dataset.type === 'text' ? c.value : c.src, x: el.style.left, y: el.style.top, w: el.style.width, h: el.style.height, trans: el.dataset.trans === "true" });
-            });
-            localStorage.setItem(currentCode, JSON.stringify(items));
+        function uploadBackground(input) {
+            const reader = new FileReader();
+            reader.onload = (e) => { document.body.style.backgroundImage = `url('${e.target.result}')`; pushToCloud(); };
+            reader.readAsDataURL(input.files[0]);
         }
 
-        function loadAll() {
-            const items = JSON.parse(localStorage.getItem(currentCode) || '[]');
-            items.forEach(d => addItem(d.type, d.val, d.x, d.y, d.w, d.h, d.trans));
-            const imgData = localStorage.getItem(currentCode + "_draw");
-            if (imgData) { const img = new Image(); img.onload = () => ctx.drawImage(img, 0, 0); img.src = imgData; }
-            const bg = localStorage.getItem(currentCode + "_bg");
-            if (bg) document.body.style.backgroundImage = `url('${bg}')`;
-        }
-
-        function clearAll() { if(confirm("Erase space?")) { localStorage.clear(); location.reload(); } }
-        window.onresize = resizeCanvas;
+        // Drawing events
+        canvas.onmousedown = canvas.ontouchstart = (e) => { 
+            if(!activeMode) return; isDrawing = true; ctx.beginPath(); 
+            const rect = canvas.getBoundingClientRect();
+            ctx.moveTo((e.touches?e.touches[0].clientX:e.clientX)-rect.left, (e.touches?e.touches[0].clientY:e.clientY)-rect.top);
+        };
+        canvas.onmousemove = canvas.ontouchmove = (e) => {
+            if(!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.touches?e.touches[0].clientX:e.clientX)-rect.left;
+            const y = (e.touches?e.touches[0].clientY:e.clientY)-rect.top;
+            ctx.lineTo(x, y); ctx.lineWidth = 3; ctx.lineCap = 'round';
+            if(activeMode === 'erase') { ctx.globalCompositeOperation = 'destination-out'; ctx.lineWidth = 20; }
+            else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = currentColor; }
+            ctx.stroke();
+        };
+        window.onmouseup = window.ontouchend = () => { if(isDrawing) { isDrawing = false; pushToCloud(); } };
     </script>
 </body>
 </html>
