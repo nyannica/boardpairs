@@ -2,130 +2,130 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Studio Duo | Advanced Live</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Studio Duo | Mobile Live</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --bg-base: #fcfcfc;
-            --surface: rgba(255, 255, 255, 0.9);
+            --surface: rgba(255, 255, 255, 0.95);
             --accent: #111111;
             --text-main: #222222;
             --border: rgba(0, 0, 0, 0.1);
-            --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            --shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            --safe-top: env(safe-area-inset-top);
         }
 
         body, html {
             margin: 0; padding: 0; height: 100%; width: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-            background-color: var(--bg-base); background-size: cover; background-position: center;
-            color: var(--text-main); overflow: hidden; touch-action: none;
-            transition: background 0.3s ease;
+            background-color: var(--bg-base);
+            color: var(--text-main); overflow: hidden; 
+            touch-action: none; /* Critical for drawing performance */
         }
 
-        #gate { position: fixed; inset: 0; background: var(--bg-base); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9000; }
-        .gate-input { background: transparent; border: none; border-bottom: 2px solid var(--border); color: var(--text-main); font-size: 20px; text-align: center; outline: none; padding: 10px; letter-spacing: 8px; width: 220px; margin-bottom: 20px; }
-        .gate-btn { background: var(--accent); color: white; border: none; padding: 12px 32px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; border-radius: 4px; }
+        /* Access Gate - Mobile Friendly */
+        #gate { position: fixed; inset: 0; background: var(--bg-base); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+        .gate-input { background: transparent; border: none; border-bottom: 2px solid var(--border); color: var(--text-main); font-size: 24px; text-align: center; outline: none; padding: 15px; width: 80%; max-width: 300px; margin-bottom: 30px; }
+        .gate-btn { background: var(--accent); color: white; border: none; padding: 16px 40px; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 2px; border-radius: 50px; width: 200px; }
 
         #drawing-canvas { position: fixed; top: 0; left: 0; z-index: 1; pointer-events: none; }
-        #drawing-canvas.active { pointer-events: all; cursor: crosshair; z-index: 5; }
+        #drawing-canvas.active { pointer-events: all; z-index: 5; }
 
-        #desktop { width: 100vw; height: 100vh; position: relative; display: none; z-index: 10; pointer-events: none; }
+        #desktop { width: 100vw; height: 100vh; position: relative; display: none; z-index: 10; }
         
+        /* Responsive Taskbar */
         #taskbar {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: var(--surface); backdrop-filter: blur(20px);
-            padding: 10px 24px; border-radius: 12px;
-            display: flex; gap: 12px; align-items: center;
+            position: fixed; 
+            bottom: 20px; /* Moved to bottom for thumb reach */
+            left: 50%; transform: translateX(-50%);
+            background: var(--surface); backdrop-filter: blur(15px);
+            padding: 8px; border-radius: 20px;
+            display: flex; gap: 8px; align-items: center;
             border: 1px solid var(--border); z-index: 8000; box-shadow: var(--shadow);
-            pointer-events: all;
+            max-width: 95vw; overflow-x: auto;
+            scrollbar-width: none; /* Hide scrollbar for clean look */
         }
+        #taskbar::-webkit-scrollbar { display: none; }
 
+        .tool-btn { 
+            background: #eee; border: none; color: var(--text-main); 
+            padding: 10px 14px; border-radius: 12px;
+            cursor: pointer; font-size: 10px; text-transform: uppercase; 
+            font-weight: 700; white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .tool-btn.active { background: var(--accent); color: white; }
+
+        /* Mobile Item Adjustments */
         .item { 
-            position: absolute; min-width: 150px; min-height: 100px; 
+            position: absolute; min-width: 120px; min-height: 80px; 
             z-index: 100; pointer-events: all; display: flex; flex-direction: column;
-            box-shadow: var(--shadow); border-radius: 8px; background: var(--surface);
+            box-shadow: var(--shadow); border-radius: 12px; background: var(--surface);
             border: 1px solid var(--border); overflow: hidden;
+            touch-action: none;
         }
 
-        .drag-handle { height: 28px; width: 100%; background: rgba(0,0,0,0.04); cursor: move; display: flex; align-items: center; justify-content: center; }
-        .drag-handle::after { content: '••••'; color: #999; font-size: 12px; letter-spacing: 2px; }
+        .drag-handle { height: 35px; width: 100%; background: rgba(0,0,0,0.03); cursor: move; display: flex; align-items: center; justify-content: center; }
+        .drag-handle::after { content: '•••'; color: #bbb; letter-spacing: 3px; }
 
-        .resizer { width: 16px; height: 16px; position: absolute; right: 0; bottom: 0; cursor: nwse-resize; z-index: 110; }
-        .resizer::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 4px; height: 4px; border-right: 2px solid #ccc; border-bottom: 2px solid #ccc; }
+        .resizer { width: 30px; height: 30px; position: absolute; right: 0; bottom: 0; cursor: nwse-resize; z-index: 110; }
+        .resizer::after { content: '⌟'; position: absolute; right: 5px; bottom: 5px; font-size: 20px; color: #ccc; }
 
         .content-wrap { flex-grow: 1; position: relative; width: 100%; height: 100%; overflow: hidden; display: flex;}
-        .item textarea { width: 100%; height: 100%; border: none; resize: none; outline: none; background: transparent; padding: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; flex-grow: 1;}
-        .item img, .item video { width: 100%; height: 100%; object-fit: contain; pointer-events: none; flex-grow: 1;}
-
-        .close-btn { position: absolute; top: 6px; right: 8px; border: none; background: #ff5f56; width: 12px; height: 12px; border-radius: 50%; cursor: pointer; z-index: 120; font-size: 0; }
+        .item textarea { width: 100%; height: 100%; border: none; resize: none; outline: none; background: transparent; padding: 12px; font-size: 16px; } /* 16px prevents iOS zoom */
         
-        .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 8px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
-        .tool-btn.active { opacity: 1; border-bottom: 2px solid var(--accent); }
-
-        #colorWheel { width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer; border-radius: 50%; overflow: hidden; }
+        .close-btn { position: absolute; top: 8px; left: 8px; border: none; background: #ff5f56; width: 18px; height: 18px; border-radius: 50%; z-index: 120; }
         
-        .size-slider { width: 60px; height: 4px; cursor: pointer; accent-color: var(--accent); }
-        .slider-label { font-size: 9px; font-weight: 700; opacity: 0.6; }
-
-        .toggle-wrap { display: flex; align-items: center; gap: 4px; cursor: pointer; }
-        .toggle-wrap input { cursor: pointer; }
+        #colorWheel { width: 30px; height: 30px; border: none; border-radius: 50%; appearance: none; -webkit-appearance: none; background: none; }
+        
+        /* Floating Controls for Brush */
+        .brush-controls {
+            position: fixed; top: calc(var(--safe-top) + 10px); right: 10px;
+            background: var(--surface); padding: 10px; border-radius: 15px;
+            display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--border);
+            z-index: 8000;
+        }
     </style>
 </head>
 <body>
 
     <div id="gate">
-        <input type="password" id="accessCode" class="gate-input" placeholder="PASSKEY" onkeypress="if(event.key === 'Enter') unlock()">
+        <h2 style="font-weight: 300; letter-spacing: 4px;">STUDIO DUO</h2>
+        <input type="password" id="accessCode" class="gate-input" placeholder="PASSKEY" inputmode="numeric">
         <button class="gate-btn" onclick="unlock()">Enter</button>
     </div>
 
     <canvas id="drawing-canvas"></canvas>
 
     <div id="desktop">
+        <div class="brush-controls">
+            <input type="color" id="colorWheel" value="#111111" onchange="currentColor = this.value">
+            <input type="range" id="brushSize" min="1" max="50" value="5" style="writing-mode: bt-lr; -webkit-appearance: slider-vertical; width: 8px; height: 100px;">
+        </div>
+
         <div id="taskbar">
             <button class="tool-btn" onclick="addItem('text')">Text</button>
             <button class="tool-btn" onclick="document.getElementById('fileUp').click()">Media</button>
+            <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
+            <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
+            <button class="tool-btn" onclick="undo()">⟲</button>
+            <button class="tool-btn" onclick="clearAll()" style="color:#ff5f56;">Reset</button>
             
-            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 2px; align-items: center;">
-                <button class="tool-btn" onclick="document.getElementById('bgUp').click()">BG</button>
-                <button class="tool-btn" onclick="removeBackground()" style="font-size: 8px; color: #888;">RMV BG</button>
-            </div>
-            
-            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 10px; align-items: center;">
-                <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
-                <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
-                <input type="color" id="colorWheel" value="#111111" onchange="currentColor = this.value">
-                <span class="slider-label">SIZE</span>
-                <input type="range" class="size-slider" id="brushSize" min="1" max="50" value="3">
-                
-                <label class="toggle-wrap">
-                    <input type="checkbox" id="pressureToggle">
-                    <span style="font-size: 9px; font-weight: 700; opacity: 0.6;">PRESS</span>
-                </label>
-            </div>
-
-            <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 5px;">
-                <button class="tool-btn" onclick="undo()">⟲</button>
-                <button class="tool-btn" onclick="redo()">⟳</button>
-            </div>
-
-            <button class="tool-btn" onclick="clearAll()" style="color:red; border-left: 1px solid var(--border); padding-left:10px;">Reset</button>
-            
-            <input type="file" id="fileUp" hidden onchange="uploadMedia(this)">
-            <input type="file" id="bgUp" hidden onchange="uploadBackground(this)">
+            <input type="file" id="fileUp" hidden onchange="uploadMedia(this)" accept="image/*,video/*">
         </div>
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://djpcwjjjjwbpsvuqmxxt.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI';
+        // ... (Keep your Supabase config here) ...
+        const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+        const SUPABASE_KEY = 'YOUR_ANON_KEY';
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let currentCode = "";
         const canvas = document.getElementById('drawing-canvas');
         const ctx = canvas.getContext('2d');
         const sizeInput = document.getElementById('brushSize');
-        const pressureToggle = document.getElementById('pressureToggle');
         
         let isDrawing = false;
         let activeMode = null;
@@ -140,6 +140,12 @@
             currentCode = `studio_${input}`;
             document.getElementById('gate').style.display = "none";
             document.getElementById('desktop').style.display = "block";
+            
+            // Request fullscreen for better mobile experience
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            }
+            
             resizeCanvas();
             initialLoad();
             subscribeToChanges();
@@ -154,56 +160,6 @@
             img.src = temp;
         }
 
-        function subscribeToChanges() {
-            sb.channel('studio_realtime')
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'studio_sessions', filter: `id=eq.${currentCode}` }, 
-                payload => {
-                    renderItems(payload.new.data);
-                    renderDrawing(payload.new.drawing);
-                    renderBackground(payload.new.background);
-                }).subscribe();
-        }
-
-        window.pushUpdate = async function() {
-            if (!currentCode) return;
-            const items = [];
-            document.querySelectorAll('.item').forEach(el => {
-                const type = el.querySelector('img') ? 'image' : el.querySelector('video') ? 'video' : 'text';
-                items.push({
-                    type, x: parseInt(el.style.left), y: parseInt(el.style.top),
-                    w: parseInt(el.style.width), h: parseInt(el.style.height),
-                    val: type === 'text' ? el.querySelector('textarea').value : el.querySelector('img, video').src
-                });
-            });
-            await sb.from('studio_sessions').upsert({ 
-                id: currentCode, data: items, drawing: canvas.toDataURL(), background: document.body.style.backgroundImage 
-            });
-        };
-
-        async function initialLoad() {
-            const { data } = await sb.from('studio_sessions').select('*').eq('id', currentCode).single();
-            if (data) { 
-                renderItems(data.data); renderDrawing(data.drawing); renderBackground(data.background);
-                history = [data.drawing || canvas.toDataURL()];
-            }
-        }
-
-        function renderItems(items) {
-            if (!items) return;
-            document.querySelectorAll('.item').forEach(el => el.remove());
-            items.forEach(i => addItem(i.type, i.val, i.x, i.y, i.w, i.h, false));
-        }
-
-        function renderDrawing(drawData) {
-            if (!drawData) return;
-            const img = new Image();
-            img.onload = () => { ctx.clearRect(0,0,canvas.width, canvas.height); ctx.drawImage(img, 0, 0); };
-            img.src = drawData;
-        }
-
-        function renderBackground(bg) { document.body.style.backgroundImage = bg || ''; }
-        window.removeBackground = function() { document.body.style.backgroundImage = ''; pushUpdate(); };
-
         window.toggleMode = function(mode) {
             activeMode = (activeMode === mode) ? null : mode;
             canvas.classList.toggle('active', !!activeMode);
@@ -211,113 +167,95 @@
             document.getElementById('eraseBtn').classList.toggle('active', activeMode === 'erase');
         };
 
-        window.undo = function() {
-            if (history.length <= 1) return;
-            redoStack.push(history.pop());
-            renderDrawing(history[history.length - 1]);
-            pushUpdate();
-        };
+        // --- ENHANCED TOUCH DRAWING ---
+        canvas.addEventListener('pointerdown', (e) => {
+            if (!activeMode) return;
+            isDrawing = true;
+            [lastX, lastY] = [e.clientX, e.clientY];
+        }, { passive: false });
 
-        window.redo = function() {
-            if (redoStack.length === 0) return;
-            const state = redoStack.pop();
-            history.push(state);
-            renderDrawing(state);
-            pushUpdate();
-        };
-
-        // --- DRAWING WITH PRESSURE ---
-        canvas.onpointerdown = (e) => { 
-            isDrawing = true; [lastX, lastY] = [e.clientX, e.clientY]; 
-        };
-
-        canvas.onpointermove = (e) => {
+        canvas.addEventListener('pointermove', (e) => {
             if (!isDrawing) return;
-            ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(e.clientX, e.clientY);
+            e.preventDefault(); // Prevents scrolling while drawing
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.clientX, e.clientY);
             
             const baseSize = parseInt(sizeInput.value);
-            // Pressure is 0.5 for mouse, 0-1.0 for stylus. 
-            // If toggle is off, multiplier is always 1.
-            const pressure = pressureToggle.checked ? (e.pressure || 0.5) : 1;
+            // Auto-detect pressure for stylus, fallback for touch
+            const pressure = e.pressure > 0 ? e.pressure : 0.8;
             
             ctx.lineWidth = (activeMode === 'erase' ? baseSize * 2 : baseSize) * pressure;
-            ctx.lineCap = "round"; ctx.strokeStyle = currentColor;
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.strokeStyle = currentColor;
             ctx.globalCompositeOperation = activeMode === 'erase' ? "destination-out" : "source-over";
-            ctx.stroke(); [lastX, lastY] = [e.clientX, e.clientY];
-        };
+            ctx.stroke();
+            
+            [lastX, lastY] = [e.clientX, e.clientY];
+        }, { passive: false });
 
-        canvas.onpointerup = () => { 
+        canvas.addEventListener('pointerup', () => {
             if (!isDrawing) return;
-            isDrawing = false; 
-            history.push(canvas.toDataURL());
-            if (history.length > 30) history.shift();
-            redoStack = []; pushUpdate(); 
-        };
+            isDrawing = false;
+            pushUpdate();
+        });
 
-        window.addItem = function(type, val = '', x = 100, y = 100, w = 300, h = 200, shouldPush = true) {
-            const div = document.createElement('div');
-            div.className = 'item';
-            div.style.left = x + 'px'; div.style.top = y + 'px';
-            div.style.width = w + 'px'; div.style.height = h + 'px';
-            const handle = document.createElement('div'); handle.className = 'drag-handle';
-            const close = document.createElement('button'); close.className = 'close-btn';
-            close.onclick = () => { div.remove(); pushUpdate(); };
-            const contentWrap = document.createElement('div'); contentWrap.className = 'content-wrap';
-            let content;
-            if (type === 'text') {
-                content = document.createElement('textarea'); content.value = val;
-                content.onblur = pushUpdate;
-            } else {
-                content = document.createElement(type === 'video' ? 'video' : 'img');
-                content.src = val; if(type === 'video') content.controls = true;
-            }
-            const resizer = document.createElement('div'); resizer.className = 'resizer';
-            contentWrap.appendChild(content); div.appendChild(handle); div.appendChild(close);
-            div.appendChild(contentWrap); div.appendChild(resizer);
-            document.getElementById('desktop').appendChild(div);
-            setupInteraction(div, handle, resizer);
-            if(shouldPush) pushUpdate();
-        };
-
+        // --- TOUCH-FRIENDLY INTERACTIONS ---
         function setupInteraction(item, handle, resizer) {
-            handle.onpointerdown = (e) => {
-                if(activeMode) toggleMode(activeMode);
-                let startX = e.clientX - item.offsetLeft, startY = e.clientY - item.offsetTop;
-                document.onpointermove = (m) => { item.style.left = (m.clientX - startX) + 'px'; item.style.top = (m.clientY - startY) + 'px'; };
-                document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
-            };
-            resizer.onpointerdown = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                let startW = item.offsetWidth, startH = item.offsetHeight, startX = e.clientX, startY = e.clientY;
-                document.onpointermove = (m) => {
-                    item.style.width = Math.max(100, (startW + (m.clientX - startX))) + 'px';
+            // Dragging
+            handle.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                if(activeMode) toggleMode(null);
+                let startX = e.clientX - item.offsetLeft;
+                let startY = e.clientY - item.offsetTop;
+                
+                const move = (m) => {
+                    item.style.left = (m.clientX - startX) + 'px';
+                    item.style.top = (m.clientY - startY) + 'px';
+                };
+                
+                const up = () => {
+                    window.removeEventListener('pointermove', move);
+                    window.removeEventListener('pointerup', up);
+                    pushUpdate();
+                };
+                
+                window.addEventListener('pointermove', move);
+                window.addEventListener('pointerup', up);
+            });
+
+            // Resizing
+            resizer.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                let startW = item.offsetWidth;
+                let startH = item.offsetHeight;
+                let startX = e.clientX;
+                let startY = e.clientY;
+
+                const move = (m) => {
+                    item.style.width = Math.max(120, (startW + (m.clientX - startX))) + 'px';
                     item.style.height = Math.max(80, (startH + (m.clientY - startY))) + 'px';
                 };
-                document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
-            };
+
+                const up = () => {
+                    window.removeEventListener('pointermove', move);
+                    window.removeEventListener('pointerup', up);
+                    pushUpdate();
+                };
+
+                window.addEventListener('pointermove', move);
+                window.addEventListener('pointerup', up);
+            });
         }
 
-        window.uploadMedia = function(input) {
-            const file = input.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => addItem(file.type.startsWith('image') ? 'image' : 'video', e.target.result);
-            reader.readAsDataURL(file);
-        };
-
-        window.uploadBackground = function(input) {
-            const file = input.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => { document.body.style.backgroundImage = `url('${e.target.result}')`; pushUpdate(); };
-            reader.readAsDataURL(file);
-        };
-
-        window.clearAll = async function() { 
-            if(confirm("Erase Everything?")) { 
-                await sb.from('studio_sessions').delete().eq('id', currentCode);
-                location.reload();
-            } 
-        };
+        // ... (Keep renderItems, uploadMedia, and clearAll logic from your original script) ...
+        // Note: Ensure addItem calls setupInteraction() as in your original code.
+        
         window.onresize = resizeCanvas;
+        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 200));
     </script>
 </body>
 </html>
