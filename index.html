@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Studio Duo | Pro Zoom & Pan</title>
+    <title>Studio Duo | High Performance</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -22,7 +22,6 @@
             color: var(--text-main); overflow: auto; touch-action: none;
         }
 
-        /* Viewport for Zooming */
         #viewport {
             width: 300vw; height: 300vh;
             transform-origin: 0 0;
@@ -52,33 +51,20 @@
             pointer-events: all;
         }
 
-        .item { 
-            position: absolute; min-width: 150px; min-height: 100px; 
-            z-index: 100; pointer-events: all; display: flex; flex-direction: column;
-            box-shadow: var(--shadow); border-radius: 8px; background: var(--surface);
-            border: 1px solid var(--border); overflow: hidden;
-        }
-
-        .drag-handle { height: 28px; width: 100%; background: rgba(0,0,0,0.04); cursor: move; display: flex; align-items: center; justify-content: center; }
-        .drag-handle::after { content: '••••'; color: #999; font-size: 12px; letter-spacing: 2px; }
-
-        .resizer { width: 16px; height: 16px; position: absolute; right: 0; bottom: 0; cursor: nwse-resize; z-index: 110; }
-        .resizer::after { content: ''; position: absolute; right: 4px; bottom: 4px; width: 4px; height: 4px; border-right: 2px solid #ccc; border-bottom: 2px solid #ccc; }
-
-        .content-wrap { flex-grow: 1; position: relative; width: 100%; height: 100%; overflow: hidden; display: flex;}
-        .item textarea { width: 100%; height: 100%; border: none; resize: none; outline: none; background: transparent; padding: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; flex-grow: 1;}
-        .item img, .item video { width: 100%; height: 100%; object-fit: contain; pointer-events: none; flex-grow: 1;}
-
-        .close-btn { position: absolute; top: 6px; right: 8px; border: none; background: #ff5f56; width: 12px; height: 12px; border-radius: 50%; cursor: pointer; z-index: 120; font-size: 0; }
-        
         .tool-btn { background: transparent; border: none; color: var(--text-main); padding: 6px 8px; cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.5; font-weight: 500; }
         .tool-btn.active { opacity: 1; border-bottom: 2px solid var(--accent); }
 
-        #colorWheel { width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer; border-radius: 50%; overflow: hidden; }
+        .item { position: absolute; min-width: 150px; min-height: 100px; z-index: 100; pointer-events: all; display: flex; flex-direction: column; box-shadow: var(--shadow); border-radius: 8px; background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+        .drag-handle { height: 28px; width: 100%; background: rgba(0,0,0,0.04); cursor: move; display: flex; align-items: center; justify-content: center; }
+        .resizer { width: 16px; height: 16px; position: absolute; right: 0; bottom: 0; cursor: nwse-resize; z-index: 110; }
+        .content-wrap { flex-grow: 1; position: relative; width: 100%; height: 100%; overflow: hidden; display: flex;}
+        .item textarea { width: 100%; height: 100%; border: none; resize: none; outline: none; background: transparent; padding: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; }
+        .item img, .item video { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+        .close-btn { position: absolute; top: 6px; right: 8px; border: none; background: #ff5f56; width: 12px; height: 12px; border-radius: 50%; cursor: pointer; z-index: 120; }
+
+        #colorWheel { width: 24px; height: 24px; border: none; padding: 0; background: none; cursor: pointer; border-radius: 50%; }
         .size-slider { width: 60px; height: 4px; cursor: pointer; accent-color: var(--accent); }
-        .slider-label { font-size: 9px; font-weight: 700; opacity: 0.6; }
-        
-        #zoom-indicator { font-size: 10px; font-weight: 800; min-width: 35px; text-align: center; color: var(--accent); }
+        #zoom-indicator { font-size: 10px; font-weight: 800; min-width: 35px; text-align: center; }
     </style>
 </head>
 <body>
@@ -98,21 +84,25 @@
         <button class="tool-btn" onclick="document.getElementById('fileUp').click()">Media</button>
         
         <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 5px; align-items: center;">
+            <button class="tool-btn" onclick="document.getElementById('bgUp').click()">BG</button>
+            <button class="tool-btn" onclick="removeBackground()" style="font-size: 8px; color: #888;">RMV</button>
+        </div>
+
+        <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 4px; align-items: center;">
             <button class="tool-btn" onclick="changeZoom(-0.25)">-</button>
             <span id="zoom-indicator">100%</span>
             <button class="tool-btn" onclick="changeZoom(0.25)">+</button>
             <button class="tool-btn" onclick="toggleMode('pan')" id="panBtn">🖐</button>
         </div>
         
-        <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 10px; align-items: center;">
+        <div style="border-left: 1px solid var(--border); padding-left: 10px; display: flex; gap: 8px; align-items: center;">
             <button class="tool-btn" onclick="toggleMode('draw')" id="drawBtn">Draw</button>
             <button class="tool-btn" onclick="toggleMode('erase')" id="eraseBtn">Erase</button>
             <input type="color" id="colorWheel" value="#111111" onchange="currentColor = this.value">
-            <span class="slider-label">SIZE</span>
             <input type="range" class="size-slider" id="brushSize" min="1" max="50" value="3">
             <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
                 <input type="checkbox" id="pressureToggle">
-                <span style="font-size: 9px; font-weight: 700; opacity: 0.6;">PRESS</span>
+                <span style="font-size: 9px; font-weight: 700;">PRESS</span>
             </label>
         </div>
 
@@ -128,8 +118,8 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://djpcwjjjjwbpsvuqmxxt.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcGN3ampqandicHN2dXFteHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzExNzM4MzMsImV4cCI6MjA4Njc0OTgzM30.jSRjuVf2tcGHg1QceEquaE146e2FNaoNBnyjJ36_IZI';
+        const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+        const SUPABASE_KEY = 'YOUR_ANON_KEY';
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let currentCode = "";
@@ -177,7 +167,7 @@
                 payload => {
                     renderItems(payload.new.data);
                     renderDrawing(payload.new.drawing);
-                    renderBackground(payload.new.background);
+                    if (payload.new.background) viewport.style.backgroundImage = `url(${payload.new.background})`;
                 }).subscribe();
         }
 
@@ -192,12 +182,21 @@
                     val: type === 'text' ? el.querySelector('textarea').value : el.querySelector('img, video').src
                 });
             });
-            await sb.from('studio_sessions').upsert({ id: currentCode, data: items, drawing: canvas.toDataURL(), background: document.body.style.backgroundImage });
+            // Optimization: WebP compression for database
+            const drawingData = canvas.toDataURL("image/webp", 0.4);
+            const bgData = viewport.style.backgroundImage.replace(/url\(['"]?(.*?)['"]?\)/, '$1');
+
+            await sb.from('studio_sessions').upsert({ id: currentCode, data: items, drawing: drawingData, background: bgData });
         };
 
         async function initialLoad() {
             const { data } = await sb.from('studio_sessions').select('*').eq('id', currentCode).single();
-            if (data) { renderItems(data.data); renderDrawing(data.drawing); renderBackground(data.background); history = [data.drawing]; }
+            if (data) { 
+                renderItems(data.data); 
+                renderDrawing(data.drawing); 
+                if (data.background) viewport.style.backgroundImage = `url(${data.background})`;
+                history = [data.drawing || canvas.toDataURL()]; 
+            }
         }
 
         function renderItems(items) {
@@ -213,19 +212,17 @@
             img.src = drawData;
         }
 
-        function renderBackground(bg) { viewport.style.backgroundImage = bg ? `url(${bg})` : ''; }
         window.removeBackground = function() { viewport.style.backgroundImage = ''; pushUpdate(); };
 
         window.toggleMode = function(mode) {
             activeMode = (activeMode === mode) ? null : mode;
             canvas.classList.toggle('active', activeMode === 'draw' || activeMode === 'erase');
             viewport.classList.toggle('pan-active', activeMode === 'pan');
-            document.getElementById('drawBtn').classList.toggle('active', activeMode === 'draw');
-            document.getElementById('eraseBtn').classList.toggle('active', activeMode === 'erase');
-            document.getElementById('panBtn').classList.toggle('active', activeMode === 'pan');
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+            if (activeMode) document.getElementById(activeMode + 'Btn').classList.add('active');
         };
 
-        // --- PANNING LOGIC ---
+        // --- PANNING ---
         window.addEventListener('mousedown', (e) => {
             if (activeMode !== 'pan') return;
             isPanning = true;
@@ -234,43 +231,45 @@
             scrollLeft = document.body.scrollLeft;
             scrollTop = document.body.scrollTop;
         });
-
         window.addEventListener('mousemove', (e) => {
             if (!isPanning) return;
-            e.preventDefault();
-            const x = e.pageX - document.body.offsetLeft;
-            const y = e.pageY - document.body.offsetTop;
-            const walkX = (x - startX);
-            const walkY = (y - startY);
-            document.body.scrollLeft = scrollLeft - walkX;
-            document.body.scrollTop = scrollTop - walkY;
+            document.body.scrollLeft = scrollLeft - (e.pageX - document.body.offsetLeft - startX);
+            document.body.scrollTop = scrollTop - (e.pageY - document.body.offsetTop - startY);
         });
-
         window.addEventListener('mouseup', () => isPanning = false);
 
-        // --- DRAWING LOGIC ---
+        // --- OPTIMIZED DRAWING ---
         canvas.onpointerdown = (e) => { 
             if (activeMode !== 'draw' && activeMode !== 'erase') return;
             isDrawing = true; 
-            lastX = e.offsetX;
-            lastY = e.offsetY;
+            lastX = e.offsetX; lastY = e.offsetY;
+            redoStack = [];
         };
 
         canvas.onpointermove = (e) => {
             if (!isDrawing) return;
-            const currX = e.offsetX;
-            const currY = e.offsetY;
-            ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(currX, currY);
-            const baseSize = parseInt(sizeInput.value);
-            const pressure = document.getElementById('pressureToggle').checked ? (e.pressure || 0.5) : 1;
-            ctx.lineWidth = (activeMode === 'erase' ? baseSize * 2 : baseSize) * pressure;
-            ctx.lineCap = "round"; ctx.strokeStyle = currentColor;
-            ctx.globalCompositeOperation = activeMode === 'erase' ? "destination-out" : "source-over";
-            ctx.stroke(); 
-            [lastX, lastY] = [currX, currY];
+            requestAnimationFrame(() => {
+                if (!isDrawing) return;
+                const currX = e.offsetX; const currY = e.offsetY;
+                ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(currX, currY);
+                const size = parseInt(sizeInput.value);
+                const pressure = document.getElementById('pressureToggle').checked ? (e.pressure || 0.5) : 1;
+                ctx.lineWidth = (activeMode === 'erase' ? size * 2 : size) * pressure;
+                ctx.lineCap = "round"; ctx.lineJoin = "round";
+                ctx.strokeStyle = currentColor;
+                ctx.globalCompositeOperation = activeMode === 'erase' ? "destination-out" : "source-over";
+                ctx.stroke(); 
+                [lastX, lastY] = [currX, currY];
+            });
         };
 
-        canvas.onpointerup = () => { if (!isDrawing) return; isDrawing = false; history.push(canvas.toDataURL()); pushUpdate(); };
+        canvas.onpointerup = () => { 
+            if (!isDrawing) return; 
+            isDrawing = false; 
+            history.push(canvas.toDataURL("image/webp", 0.4));
+            if (history.length > 25) history.shift();
+            pushUpdate(); 
+        };
 
         window.addItem = function(type, val = '', x = 100, y = 100, w = 300, h = 200, shouldPush = true) {
             const div = document.createElement('div');
@@ -290,18 +289,19 @@
 
         function setupInteraction(item, handle, resizer) {
             handle.onpointerdown = (e) => {
-                let startX = e.clientX - item.offsetLeft * currentScale, startY = e.clientY - item.offsetTop * currentScale;
+                let sX = e.clientX - item.offsetLeft * currentScale, sY = e.clientY - item.offsetTop * currentScale;
                 document.onpointermove = (m) => { 
-                    item.style.left = ((m.clientX - startX) / currentScale) + 'px'; 
-                    item.style.top = ((m.clientY - startY) / currentScale) + 'px'; 
+                    item.style.left = ((m.clientX - sX) / currentScale) + 'px'; 
+                    item.style.top = ((m.clientY - sY) / currentScale) + 'px'; 
                 };
                 document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
             };
             resizer.onpointerdown = (e) => {
-                let startW = item.offsetWidth, startH = item.offsetHeight, startX = e.clientX, startY = e.clientY;
+                e.preventDefault();
+                let sW = item.offsetWidth, sH = item.offsetHeight, sX = e.clientX, sY = e.clientY;
                 document.onpointermove = (m) => {
-                    item.style.width = Math.max(100, (startW + (m.clientX - startX) / currentScale)) + 'px';
-                    item.style.height = Math.max(80, (startH + (m.clientY - startY) / currentScale)) + 'px';
+                    item.style.width = Math.max(100, (sW + (m.clientX - sX) / currentScale)) + 'px';
+                    item.style.height = Math.max(80, (sH + (m.clientY - sY) / currentScale)) + 'px';
                 };
                 document.onpointerup = () => { document.onpointermove = null; pushUpdate(); };
             };
@@ -324,6 +324,7 @@
         window.clearAll = async function() { if(confirm("Erase Everything?")) { await sb.from('studio_sessions').delete().eq('id', currentCode); location.reload(); } };
         window.undo = function() { if (history.length <= 1) return; redoStack.push(history.pop()); renderDrawing(history[history.length - 1]); pushUpdate(); };
         window.redo = function() { if (redoStack.length === 0) return; const state = redoStack.pop(); history.push(state); renderDrawing(state); pushUpdate(); };
+        window.onresize = resizeCanvas;
     </script>
 </body>
 </html>
