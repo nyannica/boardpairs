@@ -1,10 +1,3 @@
-To ensure your taskbar and buttons remain interactive even when a background image is set, I have adjusted the **z-index** hierarchy and the **pointer-events** logic.
-
-In the previous version, certain elements or the body background could potentially overlap the interactive layers on mobile devices. I have explicitly set the `body` background to the lowest layer and ensured the `#desktop` container (which holds your taskbar and items) is positioned to stay on top while allowing clicks to "pass through" to the drawing canvas when necessary.
-
-### Studio Duo | Optimized Layering & Interaction
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -285,15 +278,3 @@ In the previous version, certain elements or the body background could potential
 </body>
 </html>
 
-```
-
-### What Changed?
-
-1. **Strict Z-Indexing:** I assigned specific ranges: Background (`-1`), Canvas (`10`), Desktop/Taskbar (`100`), and Items (`200+`). This ensures the background can never "float" above your buttons.
-2. **Pointer Events Control:** * The `#desktop` div now has `pointer-events: none`. This means it exists as a container but doesn't block the drawing canvas below it.
-* The `#taskbar` and `.item` elements have `pointer-events: all`. This restores clickability to the buttons and text areas.
-
-
-3. **Fixed Body Layering:** Added `z-index: -1` to the body and forced it to be the absolute bottom layer.
-
-Would you like me to add a **"Save as PNG"** button so you can download the final composition including the drawing and images?
